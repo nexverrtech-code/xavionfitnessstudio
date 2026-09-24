@@ -1,0 +1,16 @@
+name: Deploy Backend
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: cd backend && uv sync
+      - run: cd backend && uv run pywrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
