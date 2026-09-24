@@ -1,0 +1,253 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* SmartGym theme: charcoal primary + energetic lime accent (all colours are tokens —
+     components never hard-code hex values). */
+  --color-primary: #16181d;
+  --color-primary-hover: #272a31;
+  --color-primary-active: #0c0d10;
+  --color-on-primary: #ffffff;
+  --color-hero: #121418;
+  --color-hero-danger: #2a1015;
+
+  /* Accent scale (lime / "volt") for highlights, selection, links and focus. */
+  --color-accent-50: #f7fee7;
+  --color-accent-100: #ecfccb;
+  --color-accent-200: #d9f99d;
+  --color-accent-300: #bef264;
+  --color-accent-400: #a3e635;
+  --color-accent-500: #84cc16;
+  --color-accent-600: #65a30d;
+  --color-accent-700: #4d7c0f;
+  --color-accent-800: #3f6212;
+  --color-accent-900: #365314;
+  --color-accent-950: #1a2e05;
+  --color-volt: #c6f432;
+  --color-volt-soft: #e9fbb1;
+  --color-on-volt: #1a2400;
+
+  /* Status (reserved for state, always shown with an icon + label). */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-200: #a7f3d0;
+  --color-success-300: #6ee7b7;
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+  --color-success-800: #065f46;
+  --color-success-900: #064e3b;
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-warning-800: #92400e;
+  --color-warning-900: #78350f;
+  --color-warning-950: #451a03;
+  --color-danger-50: #fff1f2;
+  --color-danger-100: #ffe4e6;
+  --color-danger-200: #fecdd3;
+  --color-danger-300: #fda4af;
+  --color-danger-400: #fb7185;
+  --color-danger-500: #f43f5e;
+  --color-danger-600: #e11d48;
+  --color-danger-700: #be123c;
+  --color-danger-800: #9f1239;
+  --color-danger-900: #881337;
+  --color-info-50: #f0f9ff;
+  --color-info-100: #e0f2fe;
+  --color-info-200: #bae6fd;
+  --color-info-300: #7dd3fc;
+  --color-info-400: #38bdf8;
+  --color-info-500: #0ea5e9;
+  --color-info-600: #0284c7;
+  --color-info-700: #0369a1;
+  --color-info-800: #075985;
+  --color-info-900: #0c4a6e;
+
+  /* Neutral charcoal greys (overlays, neutral badges). */
+  --color-neutral-50: #f6f7f9;
+  --color-neutral-100: #eceef1;
+  --color-neutral-200: #d8dbe0;
+  --color-neutral-300: #b8bdc6;
+  --color-neutral-400: #8f95a1;
+  --color-neutral-500: #6b717d;
+  --color-neutral-600: #515661;
+  --color-neutral-700: #3f434c;
+  --color-neutral-800: #2a2d34;
+  --color-neutral-900: #1b1d22;
+  --color-neutral-950: #0f1013;
+
+  /* QR codes stay dark-on-light in every theme so scanners can read them. */
+  --color-qr-dark: #111318;
+  --color-qr-light: #ffffff;
+  --color-logo-from: #33373f;
+  --color-logo-to: #111318;
+
+  /* Semantic surfaces (overridden in .dark) */
+  --color-canvas: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-subtle: #f7f8fa;
+  --color-hover: #eff0f3;
+  --color-line: #e5e7eb;
+  --color-line-strong: #d2d5dc;
+  --color-ink: #111318;
+  --color-ink-2: #343842;
+  --color-muted: #646a76;
+  --color-faint: #989ea9;
+
+  /* Chart series — validated (lightness band, chroma, CVD, contrast) against the card
+     surface in each mode with the dataviz palette validator. */
+  --color-viz-1: #65a30d;
+  --color-viz-2: #7c3aed;
+  --color-viz-grid: #eceef1;
+
+  --shadow-card: 0 1px 2px rgb(16 20 40 / 0.04), 0 1px 3px rgb(16 20 40 / 0.05);
+  --shadow-pop: 0 16px 40px -12px rgb(16 20 40 / 0.22), 0 4px 10px -4px rgb(16 20 40 / 0.1);
+  --shadow-glow: 0 10px 30px -10px rgb(22 24 29 / 0.55);
+
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --animate-sheet-up: sheet-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-drawer-in: drawer-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-toast-in: toast-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-scan: scan 2.2s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: none; }
+  }
+  @keyframes drawer-in {
+    from { transform: translateX(100%); }
+    to { transform: none; }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes scan {
+    0%, 100% { top: 8%; }
+    50% { top: 88%; }
+  }
+}
+
+.dark {
+  --color-primary: #c6f432;
+  --color-primary-hover: #d3f865;
+  --color-primary-active: #b2dd1d;
+  --color-on-primary: #151a06;
+  --color-hero: #0e1013;
+  --color-hero-danger: #22090e;
+  --color-canvas: #0a0b0e;
+  --color-surface: #15171d;
+  --color-subtle: #191c23;
+  --color-hover: #1f232b;
+  --color-line: #262a33;
+  --color-line-strong: #333845;
+  --color-ink: #eef0f4;
+  --color-ink-2: #c5c9d3;
+  --color-muted: #8f95a3;
+  --color-faint: #646a78;
+  --color-viz-1: #6aa812;
+  --color-viz-2: #9678ff;
+  --color-viz-grid: #22262e;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 20px 44px -12px rgb(0 0 0 / 0.65), 0 4px 12px -4px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 10px 30px -10px rgb(198 244 50 / 0.35);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent-400) 40%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-600);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input[type='date']::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
+  .dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-hover) 0%, var(--color-line) 50%, var(--color-hover) 100%);
+    background-size: 800px 100%;
+    animation: var(--animate-shimmer);
+  }
+  .bg-grid {
+    background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.12) 1px, transparent 0);
+    background-size: 18px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

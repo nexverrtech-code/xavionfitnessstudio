@@ -1,0 +1,34 @@
+# Secrets — never commit
+.dev.vars
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+admin.sql
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/python_modules/
+backend/.local/
+
+# Wrangler / Node
+.wrangler/
+node_modules/
+frontend/dist/
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local runtime tooling (uv / pywrangler)
+backend/.uv/
+backend/.venv-workers/
+
+# Files moved aside during refactors (kept locally so nothing is lost; safe to delete)
+.snapshots/

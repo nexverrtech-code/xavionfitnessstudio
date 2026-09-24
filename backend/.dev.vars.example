@@ -1,0 +1,13 @@
+# Local secrets for `uv run pywrangler dev`. Copy to .dev.vars (git-ignored).
+ENVIRONMENT=development
+JWT_SECRET=dev-only-change-me-to-a-long-random-string-0123456789
+AUTH_SECRET=dev-only-auth-pepper-change-me-0123456789abcdef
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# Optional: first-run admin setup page (/setup). Remove after creating the admin.
+# SETUP_TOKEN=choose-a-long-random-token
+
+# Optional: in-app D1 Time Travel restore (Data & Backup). Needs an API token with D1:Edit.
+# CF_ACCOUNT_ID=
+# CF_API_TOKEN=
+# D1_DATABASE_ID=

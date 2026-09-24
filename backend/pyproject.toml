@@ -1,0 +1,30 @@
+[project]
+name = "smartgym-api"
+version = "1.0.0"
+description = "SmartGym API — FastAPI on Cloudflare Python Workers with D1"
+requires-python = ">=3.13,<3.14"
+# Runtime dependencies are vendored into the Worker by pywrangler. Keep this list tiny:
+# FastAPI brings Starlette + Pydantic; everything else (JWT, PBKDF2, PDF, CSV) is stdlib.
+dependencies = ["fastapi"]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+    "pytest",
+    "httpx",
+    "uvicorn",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.*",
+    "ignore::DeprecationWarning:fastapi.*",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+
+[tool.ruff]
+line-length = 130
+src = ["src"]

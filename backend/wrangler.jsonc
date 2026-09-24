@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "smartgym-api",
+  "main": "src/main.py",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["python_workers"],
+
+  // The API on its own subdomain (the zone must be on Cloudflare): https://api.gymname.com/api/...
+  // "routes": [{ "pattern": "api.gymname.com", "custom_domain": true }],
+  "workers_dev": true,
+
+  // Never hard-code database ids or secrets in application code: the Worker reaches D1
+  // only through this binding (self.env.DB).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "smartgym-db",
+      // Replace with the id printed by: npx wrangler d1 create smartgym-db
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Once a day at 00:30 UTC = 06:00 IST: membership statuses, in-app expiry reminders,
+  // clean-up of non-critical data and the storage snapshot.
+  "triggers": { "crons": ["30 0 * * *"] },
+
+  // Per-IP sign-in throttle (Workers Rate Limiting binding). Account lockout after
+  // 5 failed passwords is enforced in D1 regardless; remove this block if your plan
+  // doesn't offer the binding.
+  "ratelimits": [
+    { "name": "LOGIN_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  // Public, non-secret configuration. Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN
+  // and CF_API_TOKEN) are set with `npx wrangler secret put NAME` — never here.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ALLOWED_ORIGINS": "https://gymname.com,https://www.gymname.com",
+    "GYM_TIMEZONE": "Asia/Kolkata",
+    "GYM_UTC_OFFSET_MINUTES": "330",
+    "DEFAULT_COUNTRY_CODE": "91",
+    // Cloudflare Free plan: 500 MB per D1 database, 7 days of Time Travel.
+    "D1_MAX_BYTES": "500000000",
+    "D1_TIME_TRAVEL_DAYS": "7",
+    "D1_DATABASE_NAME": "smartgym-db",
+    // PBKDF2 rounds sized for the Free plan's 10 ms CPU budget (raise on Workers Paid).
+    "PASSWORD_ITERATIONS": "20000"
+  },
+
+  "observability": { "enabled": true }
+}
