@@ -176,8 +176,8 @@ class MemberService:
             raise NotFound("Member not found.")
         return await self.qr(member_id)
 
-    async def enable_app(self, member_id: int) -> dict[str, Any]:
-        return await UserService(self.ctx).member_login(member_id)
+    async def enable_app(self, member_id: int, *, password: str | None = None, must_change: bool = True) -> dict[str, Any]:
+        return await UserService(self.ctx).member_login(member_id, password=password, must_change=must_change)
 
     async def disable_app(self, member_id: int) -> None:
         member = await self.members.basic(member_id)

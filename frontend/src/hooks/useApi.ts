@@ -84,6 +84,13 @@ export function invalidate(...prefixes: string[]): void {
   }
 }
 
+/** Store data the caller already has (e.g. a save response) and update every screen using it,
+ *  without another request that could meet an older copy. */
+export function setCached(key: string, data: unknown): void {
+  remember(key, data)
+  subscribers.get(key)?.forEach((fn) => fn())
+}
+
 export function clearApiCache(): void {
   for (const entry of inflight.values()) entry.controller.abort()
   inflight.clear()
@@ -107,6 +114,7 @@ export function useApi<T>(
 ): ApiState<T> {
   const fetcherRef = useRef(fetcher)
   fetcherRef.current = fetcher
+  const shownKey = useRef(key)
   const [version, setVersion] = useState(0)
   const [state, setState] = useState<{ data?: T; error?: ApiError; loading: boolean; refreshing: boolean }>(() => {
     const cached = key ? cache.get(key) : undefined
@@ -120,12 +128,20 @@ export function useApi<T>(
     }
     const cached = cache.get(key)
     const fresh = !!cached && Date.now() - cached.time < (options.freshMs ?? FRESH_MS)
-    setState((prev) => ({
-      data: cached ? (cached.data as T) : options.keepPrevious ? prev.data : undefined,
-      error: undefined,
-      loading: !cached && !(options.keepPrevious && prev.data !== undefined),
-      refreshing: !fresh,
-    }))
+    // Refreshing the same data (after a change elsewhere) keeps showing it until the new copy
+    // arrives — screens and open dialogs don't flash back to a loading state. A different key
+    // shows old data only when the caller asks for it (e.g. the next page of a list).
+    const sameKey = shownKey.current === key
+    shownKey.current = key
+    setState((prev) => {
+      const kept = sameKey || options.keepPrevious ? prev.data : undefined
+      return {
+        data: cached ? (cached.data as T) : kept,
+        error: undefined,
+        loading: !cached && kept === undefined,
+        refreshing: !fresh,
+      }
+    })
     if (fresh) return
 
     let active = true

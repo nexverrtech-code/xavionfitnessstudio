@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>SmartGym</title>
-    <meta name="description" content="SmartGym — members, memberships, UPI payments, QR attendance, workouts and progress in one fast app." />
+    <title>Gym member app</title>
+    <meta name="description" content="Membership, QR check-in, UPI renewals, workouts and progress — the gym's member and staff app." />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0a0b0e" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
@@ -14,20 +14,27 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="SmartGym" />
+    <meta name="apple-mobile-web-app-title" content="Gym" />
+    <meta name="application-name" content="Gym" />
     <script>
       (function () {
         try {
           var t = localStorage.getItem('smartgym.theme') || 'system'
           var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
           if (dark) document.documentElement.classList.add('dark')
+          var c = JSON.parse(localStorage.getItem('smartgym.config') || 'null')
+          if (c && c.gym_name) {
+            document.title = c.gym_name
+            document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', c.gym_name)
+            document.querySelector('meta[name="application-name"]').setAttribute('content', c.gym_name)
+          }
         } catch (e) {}
       })()
     </script>
   </head>
   <body>
     <div id="root"></div>
-    <noscript>SmartGym needs JavaScript to run.</noscript>
+    <noscript>This app needs JavaScript to run.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

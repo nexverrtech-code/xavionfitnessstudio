@@ -118,7 +118,7 @@ export default function NotificationsPage() {
     <div>
       <PageHeader
         title="Notifications"
-        description="In-app only — SmartGym sends no SMS, WhatsApp or email"
+        description="In-app only — no SMS, WhatsApp or email is sent"
         actions={
           <>
             <Button variant="secondary" icon={BellRing} loading={reminders.loading} onClick={() => reminders.run()}>

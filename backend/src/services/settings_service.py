@@ -1,6 +1,8 @@
 """Gym settings: defaults in code, admin overrides in the small ``settings`` table.
 
-Settings change rarely, so they are cached per isolate for 60 seconds.
+Settings change rarely, so business logic reads them from a short per-isolate cache (15 s).
+Screens that show them — the public gym profile and the Settings page — read them fresh, so a
+change (e.g. a new gym name) appears everywhere as soon as it is saved.
 """
 
 from __future__ import annotations
@@ -54,7 +56,7 @@ INT_KEYS = {
     "archive_after_months": (6, 120),
 }
 
-_cache = TTLCache(60, 2)
+_cache = TTLCache(15, 2)
 
 
 def _parse(key: str, raw: str) -> Any:
@@ -68,8 +70,8 @@ def _parse(key: str, raw: str) -> Any:
     return raw
 
 
-async def get_settings(db: Database) -> dict[str, Any]:
-    cached = _cache.get("settings")
+async def get_settings(db: Database, *, fresh: bool = False) -> dict[str, Any]:
+    cached = None if fresh else _cache.get("settings")
     if cached is not None:
         return cached
     stored = await SettingsRepository(db).all()
@@ -127,4 +129,4 @@ async def update_settings(db: Database, clock: Clock, changes: dict[str, Any]) -
     if validated:
         await SettingsRepository(db).save(validated, clock.now_ts())
     invalidate_cache()
-    return await get_settings(db)
+    return await get_settings(db, fresh=True)

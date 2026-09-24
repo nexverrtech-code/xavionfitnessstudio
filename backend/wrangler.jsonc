@@ -7,7 +7,8 @@
 
   // The API on its own subdomain (the zone must be on Cloudflare): https://api.gymname.com/api/...
   // "routes": [{ "pattern": "api.gymname.com", "custom_domain": true }],
-  "workers_dev": true,
+  "routes": [{ "pattern": "xavion.nexverrtech.com/api/*", "zone_name": "nexverrtech.com" }],
+  "workers_dev": false,
 
   // Never hard-code database ids or secrets in application code: the Worker reaches D1
   // only through this binding (self.env.DB).
@@ -16,7 +17,7 @@
       "binding": "DB",
       "database_name": "smartgym-db",
       // Replace with the id printed by: npx wrangler d1 create smartgym-db
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "ccfd7063-8537-403f-9e48-70b92d2d193d",
       "migrations_dir": "migrations"
     }
   ],
@@ -36,7 +37,7 @@
   // and CF_API_TOKEN) are set with `npx wrangler secret put NAME` — never here.
   "vars": {
     "ENVIRONMENT": "production",
-    "ALLOWED_ORIGINS": "https://gymname.com,https://www.gymname.com",
+    "ALLOWED_ORIGINS": "https://xavion.nexverrtech.com,https://www.xavion.nexverrtech.com",
     "GYM_TIMEZONE": "Asia/Kolkata",
     "GYM_UTC_OFFSET_MINUTES": "330",
     "DEFAULT_COUNTRY_CODE": "91",

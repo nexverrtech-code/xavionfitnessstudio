@@ -7,6 +7,7 @@ import {
   CircleCheck,
   ClipboardList,
   Dumbbell,
+  KeyRound,
   LayoutGrid,
   LineChart,
   MessageSquare,
@@ -26,6 +27,7 @@ import type { MemberStatusAction } from '@/types'
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { AssignTrainerDialog } from '@/components/members/AssignTrainerDialog'
+import { ACCESS_LABEL, AppAccessDialog, accessState } from '@/components/members/AppAccessDialog'
 import { MemberFormDialog } from '@/components/members/MemberFormDialog'
 import { QRCode } from '@/components/qr/QRCode'
 import { StatusBadge } from '@/components/ui/Badge'
@@ -121,7 +123,7 @@ export default function MemberWorkspacePage() {
   const member = workspace.data
   useDocumentTitle(member?.name ?? 'Member')
 
-  const [dialog, setDialog] = useState<'edit' | 'trainer' | 'qr' | 'suspend' | 'deactivate' | 'activate' | null>(null)
+  const [dialog, setDialog] = useState<'edit' | 'access' | 'trainer' | 'qr' | 'suspend' | 'deactivate' | 'activate' | null>(null)
   const [qr, setQr] = useState<string | null>(null)
   const tab = (params.get('tab') as Tab) || 'overview'
 
@@ -224,6 +226,7 @@ export default function MemberWorkspacePage() {
                 { label: 'Send in-app message', icon: MessageSquare, onSelect: () => actions.sendNotification({ id: member.id, name: member.name }), hidden: user?.role !== 'ADMIN' },
                 { label: 'Show QR code', icon: QrCode, onSelect: openQr, hidden: !staff },
                 { label: 'Edit profile', icon: Pencil, onSelect: () => setDialog('edit'), hidden: !staff },
+                { label: 'Member app access', icon: KeyRound, onSelect: () => setDialog('access'), hidden: !staff },
                 'divider',
                 { label: 'Reactivate', icon: CircleCheck, onSelect: () => setDialog('activate'), hidden: !staff || (member.status !== 'SUSPENDED' && member.status !== 'INACTIVE') },
                 { label: 'Suspend', icon: PauseCircle, onSelect: () => setDialog('suspend'), hidden: !staff || member.status === 'SUSPENDED' },
@@ -258,13 +261,13 @@ export default function MemberWorkspacePage() {
             hint={member.stats.latest_measured_at ? `Measured ${relativeTime(member.stats.latest_measured_at)}` : 'No measurements'}
           />
           <StatCard label="Workout plans" icon={Dumbbell} tone="brand" value={member.stats.active_workouts} hint="Active plans" />
-          <StatCard label="Member since" icon={RotateCcw} tone="slate" value={formatDate(member.joining_date, { withYear: true })} hint={`Member app: ${member.app.enabled ? 'enabled' : 'not set up'}`} />
+          <StatCard label="Member since" icon={RotateCcw} tone="slate" value={formatDate(member.joining_date, { withYear: true })} hint={`Member app: ${ACCESS_LABEL[accessState(member.app)].label.toLowerCase()}`} />
         </div>
       </div>
 
       <Tabs items={tabs} value={tab} onChange={setTab} className="mb-4" />
       <div role="tabpanel">
-        {tab === 'overview' && <OverviewTab {...tabProps} />}
+        {tab === 'overview' && <OverviewTab {...tabProps} onManageAccess={() => setDialog('access')} />}
         {tab === 'membership' && <MembershipTab {...tabProps} />}
         {tab === 'payments' && staff && <PaymentsTab {...tabProps} />}
         {tab === 'attendance' && <AttendanceTab {...tabProps} />}
@@ -273,7 +276,8 @@ export default function MemberWorkspacePage() {
         {tab === 'activity' && <ActivityTab {...tabProps} />}
       </div>
 
-      <MemberFormDialog open={dialog === 'edit'} onClose={() => setDialog(null)} member={member} />
+      <MemberFormDialog open={dialog === 'edit'} onClose={() => setDialog(null)} member={member} onManageAccess={() => setDialog('access')} />
+      <AppAccessDialog open={dialog === 'access'} onClose={() => setDialog(null)} member={member} />
       <AssignTrainerDialog open={dialog === 'trainer'} onClose={() => setDialog(null)} memberId={member.id} currentTrainerId={member.trainer?.id ?? null} />
       <Dialog
         open={dialog === 'qr'}

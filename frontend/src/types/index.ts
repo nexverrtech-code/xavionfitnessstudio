@@ -131,10 +131,12 @@ export interface MemberWorkspace {
   created_at: string
 }
 
-/** A temporary password is shown once; the person must change it at first sign-in. */
+/** Sign-in details after an account is created or reset. A generated one-time password is
+ *  shown once (it must be changed at first sign-in); a password staff typed is not echoed. */
 export interface Credentials {
   login: string
-  temporary_password: string
+  temporary_password: string | null
+  must_change_password?: boolean
   user_id?: number
 }
 

@@ -66,12 +66,15 @@ class UserRepository(Repository):
             [user_id, password_hash, token_version, now],
         )
 
-    async def reset_credentials(self, user_id: int, password_hash: str, now: str, *, name: str | None = None) -> None:
-        """New temporary password: forces a change at next sign-in and signs out every device."""
+    async def reset_credentials(
+        self, user_id: int, password_hash: str, now: str, *, name: str | None = None, must_change: bool = True,
+    ) -> None:
+        """New password (re-enables a disabled login): signs out every device and, by default,
+        forces a change at next sign-in."""
         await self.db.run(
-            "UPDATE users SET password_hash = ?2, must_change_password = 1, status = 'ACTIVE', failed_logins = 0, "
+            "UPDATE users SET password_hash = ?2, must_change_password = ?5, status = 'ACTIVE', failed_logins = 0, "
             "locked_until = NULL, token_version = token_version + 1, name = COALESCE(?4, name), updated_at = ?3 WHERE id = ?1",
-            [user_id, password_hash, now, name],
+            [user_id, password_hash, now, name, 1 if must_change else 0],
         )
 
     def insert_stmt(

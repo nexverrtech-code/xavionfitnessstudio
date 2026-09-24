@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useConfig } from '@/contexts/ConfigContext'
 
 export function useDebounce<T>(value: T, delay = 250): T {
   const [debounced, setDebounced] = useState(value)
@@ -63,10 +64,12 @@ export function useHotkey(combo: string, handler: (event: KeyboardEvent) => void
   }, [combo, options.allowInInputs, options.enabled])
 }
 
+/** "Payments · Xavion Fitness Studio" — follows a renamed gym immediately. */
 export function useDocumentTitle(title: string | undefined): void {
+  const { gym_name } = useConfig()
   useEffect(() => {
-    if (title) document.title = `${title} · SmartGym`
-  }, [title])
+    if (title) document.title = gym_name ? `${title} · ${gym_name}` : title
+  }, [title, gym_name])
 }
 
 /** Prevents double submission and exposes a loading flag. */

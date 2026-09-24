@@ -14,7 +14,7 @@ from models.domain import ROLE_BY_ID, ROLE_IDS
 from repositories.members import MemberRepository
 from repositories.trainers import TrainerRepository
 from repositories.users import UserRepository
-from security.passwords import generate_temp_password, hash_password
+from security.passwords import generate_temp_password, hash_password, password_problem
 
 from .auth_service import forget_user, login_label, user_out
 from .context import Ctx
@@ -85,24 +85,40 @@ class UserService:
         return {"user_id": user_id, "login": login_label(row), "temporary_password": temp}
 
     # -- member & trainer app logins ------------------------------------------------------------------
-    async def member_login(self, member_id: int) -> dict[str, Any]:
-        """Create (or reset) the member's app login. The member signs in with their member ID."""
+    async def member_login(self, member_id: int, *, password: str | None = None, must_change: bool = True) -> dict[str, Any]:
+        """Give (or reset) the member's app login; until then the member can't open the app.
+
+        The member signs in with their member ID (their phone number or email also work).
+        Without ``password`` a one-time password is generated, which must be changed at first
+        sign-in. With ``password`` (typed by staff) ``must_change`` decides whether the member
+        chooses their own at first sign-in."""
         members = MemberRepository(self.ctx.db)
         member = await members.basic(member_id)
         if not member:
             raise NotFound("Member not found.")
-        temp, password_hash = await self._temp_hash()
+        if password is None:
+            temp, password_hash = await self._temp_hash()
+            must_change = True
+        else:
+            problem = password_problem(password)
+            if problem:
+                raise ValidationFailed(problem, fields={"password": problem})
+            temp = None
+            password_hash = await hash_password(password, secret=self.ctx.config.auth_secret, iterations=self.ctx.config.password_iterations)
         if member["user_id"]:
-            await self.users.reset_credentials(member["user_id"], password_hash, self.ctx.now, name=member["name"])
+            await self.users.reset_credentials(member["user_id"], password_hash, self.ctx.now, name=member["name"], must_change=must_change)
             forget_user(member["user_id"])
         else:
             await self.ctx.db.batch(
                 [
-                    self.users.insert_stmt(role_id=ROLE_IDS["MEMBER"], name=member["name"], password_hash=password_hash, now=self.ctx.now),
+                    self.users.insert_stmt(
+                        role_id=ROLE_IDS["MEMBER"], name=member["name"], password_hash=password_hash, now=self.ctx.now,
+                        must_change_password=must_change,
+                    ),
                     members.link_user_stmt(member_id, self.ctx.now),
                 ]
             )
-        return {"login": member["member_code"], "temporary_password": temp}
+        return {"login": member["member_code"], "temporary_password": temp, "must_change_password": must_change}
 
     async def trainer_login(self, trainer_id: int) -> dict[str, Any]:
         trainers = TrainerRepository(self.ctx.db)

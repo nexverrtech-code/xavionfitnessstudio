@@ -56,6 +56,23 @@ Permissions are enforced by the API on every request; the UI only hides what a r
 
 Sidebar order (admin): Dashboard, Members, Membership Plans, Memberships, Payments, Attendance, Trainers, Workout Plans, Progress, Notifications, Expenses, Reports, Data & Backup, Settings.
 
+### Member app access
+
+A member **can't open the member app until staff give them access**. Everything about the login lives in one dialog, **Member app access**: open it from the member's page (*Give / Manage app access* on the Overview, or **More → Member app access**) or from **Edit member**.
+
+| State | Meaning |
+|---|---|
+| Not set up | No login yet; sign-in attempts are refused |
+| Waiting for first sign-in | Login given; the member still has to choose their own password |
+| Active | In use (shows the last sign-in) |
+| Turned off | Signed out everywhere and refused until access is given again; membership, payments and history are kept |
+
+Giving access (or setting a new password) offers two ways:
+- **One-time password** (recommended): generated, shown once, and the member must choose their own at first sign-in.
+- **Type a password**: staff choose it (same strength rules as everywhere) and decide whether the member must change it at first sign-in.
+
+The result shows the app address, the login (member ID — the member's phone number or email also work) and, for one-time passwords, the password, plus a *Copy message to send* button. A new password signs the member out on every device. *Give member app access now* on the Add member form does the same at registration. API: `POST /api/members/{id}/app-access` with an optional body `{"password": "...", "must_change_password": true}`; `DELETE` turns access off.
+
 ---
 
 ## Repository layout
@@ -78,7 +95,7 @@ backend/                       Cloudflare Python Worker
   src/utils/                   Formatting, UPI links, HTTP helpers, Cloudflare API (Time Travel)
   migrations/0001–0006         Core, payments, operations, data management, indexes, integrity triggers
   scripts/                     seed_dev.py · dev_server.py · create_admin.py · smoke_test.py
-  tests/                       pytest suite (60 tests)
+  tests/                       pytest suite (69 tests)
   wrangler.jsonc               D1 binding, cron, rate limiter, public vars
 
 frontend/                      React PWA for Cloudflare Pages
@@ -146,7 +163,7 @@ npm run dev                             # http://localhost:5173 — Vite forward
 ## Tests and checks
 
 ```bash
-cd backend  && uv run pytest                  # 60 tests: auth, members, payments, memberships, attendance,
+cd backend  && uv run pytest                  # 69 tests: auth, members, app access, payments, memberships, attendance,
                                               # permissions, notifications, reports, backups, storage
 cd frontend && npm run build                  # strict type-check + production build (emits sw.js and _headers)
 
@@ -253,6 +270,11 @@ For local development put the same names in `backend/.dev.vars` (copy `.dev.vars
 
 Gym profile · member code prefix · Direct UPI (on/off, UPI ID, payee name) · which events notify members · expiry reminders on/off · attendance (check-out on second scan, grace days, repeat-scan cooldown) · data retention (notification retention days, archive suggestion age, storage alerts).
 
+**Saved settings apply everywhere at once.** The gym name appears on every screen and browser tab, in the installed app's name (`/api/manifest.webmanifest`), the iOS home-screen label, receipts, reports, backup file names and member messages. After *Save*:
+- the admin's screens switch immediately (the saved values from the server are used directly; a new currency re-renders every screen);
+- `/api/config`, the manifest, the Settings screen and UPI payment details always read the saved values (never a cache), so other devices pick up a new name on their next load, or when the app comes back to the front;
+- other server-side uses (notification text, receipts, reports) follow within 15 seconds.
+
 ---
 
 ## Payments and memberships
@@ -316,7 +338,7 @@ An admin-only page with four tabs.
 
 **Backup & archive** — four steps:
 1. **Choose** data sets (attendance, payments & refunds, memberships, expenses, workout history, notifications, progress — members are always included) and a period.
-2. **Download** a ZIP such as `SmartGym_Backup_2024.zip`, built in the browser from paged exports:
+2. **Download** a ZIP named after the gym, such as `Xavion_Fitness_Studio_Backup_2024.zip`, built in the browser from paged exports:
    ```
    metadata.json      backup id, gym, period, data sets, per-table row counts and columns, SHA-256 of every file
    members.csv  memberships.csv  payments.csv  refunds.csv  attendance.csv  expenses.csv
@@ -388,7 +410,7 @@ The system is designed for **Workers Free** (10 ms CPU per request) and **D1 Fre
 
 ## PWA and offline behaviour
 
-- **Installable** on Android, iOS and desktop (manifest, maskable icons, shortcuts). Regenerate icons with `npm run icons`.
+- **Installable** on Android, iOS and desktop (manifest, maskable icons, shortcuts), under the gym's own name: same-origin builds link the manifest the API serves from Settings (`/api/manifest.webmanifest`; a separate API origin falls back to the static `public/manifest.webmanifest`). Regenerate icons with `npm run icons`.
 - The app shell is precached; screens are cached after first use. The member's QR pass is saved on the device and shows without signal.
 - Every write needs the network. The service worker never caches `/api` responses.
 - Hashed assets are immutable; `sw.js`/`index.html` are `no-cache`; a tab left open across a deploy recovers by reloading once.

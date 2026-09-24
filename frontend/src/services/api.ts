@@ -54,7 +54,7 @@ function normalize(error: AxiosError): ApiError {
     if (error.code === 'ECONNABORTED') {
       return new ApiError({ status: 0, code: 'TIMEOUT', message: 'The server is taking too long to respond. Please try again.' })
     }
-    return new ApiError({ status: 0, code: 'NETWORK', message: "We couldn't reach SmartGym. Check your connection and try again." })
+    return new ApiError({ status: 0, code: 'NETWORK', message: "We couldn't reach the gym's server. Check your connection and try again." })
   }
   const { status } = error.response
   const body = (error.response.data as { error?: { code?: string; message?: string; fields?: Record<string, string> } } | null)?.error

@@ -1,6 +1,6 @@
 {
-  "name": "SmartGym",
-  "short_name": "SmartGym",
+  "name": "Gym member app",
+  "short_name": "Gym",
   "description": "Gym management and member app: memberships, UPI payments, QR attendance, workouts and progress.",
   "id": "/",
   "start_url": "/",

@@ -19,7 +19,7 @@ export function LogoMark({ className }: { className?: string }) {
   )
 }
 
-export function Logo({ name = 'SmartGym', className, compact }: { name?: string; className?: string; compact?: boolean }) {
+export function Logo({ name = '', className, compact }: { name?: string; className?: string; compact?: boolean }) {
   return (
     <span className={cn('flex min-w-0 items-center gap-2.5', className)}>
       <LogoMark />

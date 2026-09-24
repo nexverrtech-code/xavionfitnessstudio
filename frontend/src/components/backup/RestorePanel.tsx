@@ -161,7 +161,7 @@ export function RestorePanel() {
 
   return (
     <Card>
-      <CardHeader icon={ArchiveRestore} title="Restore from a backup" description="Adds records from a SmartGym backup file. Existing records are never overwritten." />
+      <CardHeader icon={ArchiveRestore} title="Restore from a backup" description="Adds records from a backup file made on this page. Existing records are never overwritten." />
       <div className="space-y-5 px-5 pb-5">
         <Stepper steps={STEPS} current={stage} />
         {error && <ErrorBox message={error} />}

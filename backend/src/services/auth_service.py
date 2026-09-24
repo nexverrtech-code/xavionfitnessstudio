@@ -168,7 +168,7 @@ class AuthService:
         if not expected or not hmac.compare_digest(setup_token, expected):
             raise Forbidden("Setup is not available.")
         if await self.users.has_admin():
-            raise Conflict("SmartGym is already set up. Please sign in.")
+            raise Conflict("This gym is already set up. Please sign in.")
         problem = password_problem(password)
         if problem:
             raise ValidationFailed(problem, fields={"password": problem})

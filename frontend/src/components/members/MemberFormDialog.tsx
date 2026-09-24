@@ -1,7 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { UserPlus } from 'lucide-react'
+import { KeyRound, UserPlus } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
+import { ACCESS_LABEL, accessState } from '@/components/members/AppAccessDialog'
+import { Pill } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { Checkbox, SelectField, TextField, TextareaField } from '@/components/ui/Field'
@@ -19,6 +21,8 @@ interface MemberFormDialogProps {
   member?: MemberWorkspace | null
   onCreated?: (member: MemberWorkspace, credentials: Credentials | null) => void
   onSaved?: (member: MemberWorkspace) => void
+  /** Editing only: open the Member app access dialog (this dialog closes first). */
+  onManageAccess?: () => void
 }
 
 function toValues(member?: MemberWorkspace | null): MemberValues {
@@ -37,7 +41,7 @@ function toValues(member?: MemberWorkspace | null): MemberValues {
   }
 }
 
-export function MemberFormDialog({ open, onClose, member, onCreated, onSaved }: MemberFormDialogProps) {
+export function MemberFormDialog({ open, onClose, member, onCreated, onSaved, onManageAccess }: MemberFormDialogProps) {
   const toast = useToast()
   const editing = !!member
   const trainers = useApi(open ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'))
@@ -116,10 +120,24 @@ export function MemberFormDialog({ open, onClose, member, onCreated, onSaved }: 
         {!editing && (
           <div className="sm:col-span-2">
             <Checkbox
-              label="Create member app login"
-              description="Creates a one-time password so the member can see their membership, check-in QR and workouts, and renew with UPI."
+              label="Give member app access now"
+              description="Creates their login with a one-time password. Without it the member can’t open the app; you can also give access later from the member’s page."
               {...register('create_app_login')}
             />
+          </div>
+        )}
+        {editing && member && onManageAccess && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-subtle p-4 sm:col-span-2 sm:flex-row sm:items-center">
+            <KeyRound className="hidden size-5 shrink-0 text-muted sm:block" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">
+                Member app access <Pill tone={ACCESS_LABEL[accessState(member.app)].tone}>{ACCESS_LABEL[accessState(member.app)].label}</Pill>
+              </p>
+              <p className="mt-0.5 text-[13px] text-muted">Login, password and turning access on or off.</p>
+            </div>
+            <Button variant="secondary" size="sm" icon={KeyRound} onClick={onManageAccess}>
+              Manage app access
+            </Button>
           </div>
         )}
       </form>

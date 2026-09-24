@@ -98,7 +98,7 @@ export function TimeTravelPanel() {
             </p>
           )}
           <Button className="mt-4" icon={RotateCcw} onClick={() => window.location.reload()}>
-            Reload SmartGym
+            Reload the app
           </Button>
         </Card>
       ) : (
@@ -127,7 +127,7 @@ export function TimeTravelPanel() {
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-ink-2">
-                  In-app restore isn’t configured (it needs a Cloudflare API token as a Worker secret). Run this on a computer with the SmartGym project and Wrangler:
+                  In-app restore isn’t configured (it needs a Cloudflare API token as a Worker secret). Run this on a computer with the project and Wrangler:
                 </p>
                 <CopyCommand command={command} />
               </div>
@@ -140,7 +140,7 @@ export function TimeTravelPanel() {
         open={stage === 'warning'}
         onClose={() => setStage('idle')}
         title="WARNING"
-        description="This cannot be undone from SmartGym."
+        description="This cannot be undone from the app."
         size="sm"
         footer={
           <>
@@ -155,7 +155,7 @@ export function TimeTravelPanel() {
       >
         <p className="text-sm text-ink-2">
           The whole database will return to <strong className="text-ink">{chosen && valid ? formatDateTime(chosen.toISOString()) : '—'}</strong>. Every change made after that
-          moment will be lost for everyone using SmartGym.
+          moment will be lost for everyone using the app.
         </p>
       </Dialog>
 

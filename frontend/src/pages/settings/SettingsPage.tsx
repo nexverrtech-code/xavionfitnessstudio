@@ -31,9 +31,10 @@ import { SelectField, Switch, TextField, TextareaField } from '@/components/ui/F
 import { Menu } from '@/components/ui/Menu'
 import { PageHeader, Tabs } from '@/components/ui/Navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { useConfigActions } from '@/contexts/ConfigContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useToast } from '@/contexts/ToastContext'
-import { invalidate, useApi } from '@/hooks/useApi'
+import { invalidate, setCached, useApi } from '@/hooks/useApi'
 import { useDocumentTitle } from '@/hooks/useUtilities'
 import { isApiError } from '@/services/api'
 import { settingsApi, usersApi } from '@/services/endpoints'
@@ -69,15 +70,20 @@ function SaveBar({ dirty, onSave, onReset, saving }: { dirty: boolean; onSave: (
 
 function useSave() {
   const toast = useToast()
+  const { applyConfig } = useConfigActions()
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const save = async (changes: Partial<GymSettings>) => {
     setSaving(true)
     setErrors({})
     try {
-      await settingsApi.update(changes)
-      invalidate('settings', 'dashboard', 'storage')
-      toast.success('Settings saved')
+      const fresh = await settingsApi.update(changes)
+      // Use what the server saved everywhere at once: this screen, the header, page titles,
+      // the member app and money formatting — without a re-read that could meet an older copy.
+      setCached('settings', fresh)
+      applyConfig({ gym_name: fresh.gym_name, currency: fresh.currency, member_code_prefix: fresh.member_code_prefix })
+      invalidate('dashboard', 'storage', 'reports')
+      toast.success('Settings saved', { description: 'gym_name' in changes ? `Now showing “${fresh.gym_name}” everywhere.` : undefined })
     } catch (error) {
       if (isApiError(error) && error.fields) setErrors(error.fields)
       toast.fromError(error)
@@ -122,7 +128,11 @@ function GymTab({ settings }: { settings: GymSettings }) {
   const { save, saving, errors } = useSave()
   return (
     <Card>
-      <CardHeader icon={Building2} title="Gym profile" description="Shown on receipts, reports and in the member app" />
+      <CardHeader
+        icon={Building2}
+        title="Gym profile"
+        description="The gym name shows on every screen, browser tabs, the installed app, receipts, reports, backups and member messages."
+      />
       <div className="grid gap-4 px-5 pb-5 sm:grid-cols-2">
         <TextField label="Gym name" required value={draft.gym_name ?? ''} onChange={(e) => set('gym_name', e.target.value)} error={errors.gym_name} />
         <TextField label="Phone" value={draft.gym_phone ?? ''} onChange={(e) => set('gym_phone', e.target.value)} error={errors.gym_phone} />
@@ -178,7 +188,7 @@ function PaymentsTab({ settings }: { settings: GymSettings }) {
             { icon: Banknote, title: 'Cash at the desk', text: 'Staff record it; the membership starts immediately.' },
             { icon: Smartphone, title: 'UPI', text: 'At the desk (staff enter the UTR) or from the member app (pending until approved).' },
             { icon: Landmark, title: 'Bank transfer', text: 'Recorded with the bank reference.' },
-            { icon: CreditCard, title: 'Card (manual)', text: 'Taken on your own card terminal; SmartGym stores only the slip number — never card details.' },
+            { icon: CreditCard, title: 'Card (manual)', text: 'Taken on your own card terminal; the app stores only the slip number — never card details.' },
           ].map(({ icon: Icon, title, text }) => (
             <li key={title} className="flex gap-3 rounded-xl border border-line p-3.5">
               <Icon className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
@@ -199,7 +209,7 @@ function NotificationsTab({ settings }: { settings: GymSettings }) {
   const { save, saving } = useSave()
   return (
     <Card>
-      <CardHeader icon={BellRing} title="In-app notifications" description="Shown in the member app. SmartGym sends no SMS, WhatsApp or email." />
+      <CardHeader icon={BellRing} title="In-app notifications" description="Shown in the member app. No SMS, WhatsApp or email is sent." />
       <div className="grid gap-x-8 px-5 pb-5 lg:grid-cols-2">
         <div className="divide-y divide-line">
           <Switch
@@ -549,7 +559,7 @@ export default function SettingsPage() {
   else body = <GymTab settings={settings.data} />
   return (
     <div>
-      <PageHeader title="Settings" description="Only the settings SmartGym needs" />
+      <PageHeader title="Settings" description="Your gym’s profile, payments, notifications and data rules" />
       <Tabs className="mb-4" items={tabs} value={tab} onChange={(v) => setParams(v === 'gym' ? {} : { tab: v }, { replace: true })} />
       {body}
     </div>

@@ -18,6 +18,7 @@ protected by the downloaded backups.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -39,11 +40,13 @@ MIN_ARCHIVE_AGE_DAYS = 60      # the newest two months are never archived
 RESTORE_BATCH = 500
 
 
-def _file_name(period_from: str, period_to: str) -> str:
+def _file_name(period_from: str, period_to: str, gym_name: str = "") -> str:
+    """e.g. Xavion_Fitness_Studio_Backup_2025.zip — named after the gym (SmartGym if unnamed)."""
+    prefix = "_".join(re.findall(r"[A-Za-z0-9]+", gym_name))[:60] or "SmartGym"
     start, end = date.fromisoformat(period_from), date.fromisoformat(period_to)
     if start.month == 1 and start.day == 1 and end.month == 12 and end.day == 31:
-        return f"SmartGym_Backup_{start.year}.zip" if start.year == end.year else f"SmartGym_Backup_{start.year}-{end.year}.zip"
-    return f"SmartGym_Backup_{period_from}_to_{period_to}.zip"
+        return f"{prefix}_Backup_{start.year}.zip" if start.year == end.year else f"{prefix}_Backup_{start.year}-{end.year}.zip"
+    return f"{prefix}_Backup_{period_from}_to_{period_to}.zip"
 
 
 def _pack(stats: list[dict[str, Any]]) -> str:
@@ -133,7 +136,7 @@ class BackupService:
         backup_id = await self.repo.create(
             kind="BACKUP", status="CREATED", tables=",".join(chosen), period_from=period_from.isoformat(),
             period_to=period_to.isoformat(), watermarks=_pack(stats), record_count=record_count,
-            file_name=_file_name(period_from.isoformat(), period_to.isoformat()), notes=None,
+            file_name=_file_name(period_from.isoformat(), period_to.isoformat(), (await self.ctx.settings())["gym_name"]), notes=None,
             created_by=self.ctx.actor_id, now=self.ctx.now,
         )
         manifest = await self.get(backup_id)

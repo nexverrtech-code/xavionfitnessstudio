@@ -86,6 +86,14 @@ class MemberStatusIn(Model):
     action: Literal["SUSPEND", "REACTIVATE", "DEACTIVATE"]
 
 
+class AppAccessIn(Model):
+    """Give or reset a member's app login. Without a password a one-time password is generated
+    (always changed at first sign-in); a password typed by staff is checked for strength."""
+
+    password: Annotated[str | None, BeforeValidator(_empty_to_none), Field(max_length=128)] = None
+    must_change_password: bool = True
+
+
 class AssignTrainerIn(Model):
     trainer_id: OptionalId = None
 

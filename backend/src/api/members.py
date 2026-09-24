@@ -9,7 +9,7 @@ from fastapi.responses import Response
 
 from core.clock import add_months
 from core.errors import ValidationFailed
-from schemas.requests import AssignTrainerIn, MemberCreate, MemberStatusIn, MemberUpdate
+from schemas.requests import AppAccessIn, AssignTrainerIn, MemberCreate, MemberStatusIn, MemberUpdate
 from services.attendance_service import AttendanceService
 from services.context import Ctx
 from services.member_service import MemberService
@@ -123,8 +123,10 @@ async def reset_qr(member_id: int, ctx: Ctx = Depends(staff_ctx)) -> FastJSON:
 
 
 @router.post("/{member_id}/app-access")
-async def enable_app(member_id: int, ctx: Ctx = Depends(staff_ctx)) -> FastJSON:
-    return ok(await MemberService(ctx).enable_app(member_id))
+async def enable_app(member_id: int, body: AppAccessIn | None = None, ctx: Ctx = Depends(staff_ctx)) -> FastJSON:
+    """Give, reset or re-enable the member's app login (the member can't sign in before this)."""
+    body = body or AppAccessIn()
+    return ok(await MemberService(ctx).enable_app(member_id, password=body.password, must_change=body.must_change_password))
 
 
 @router.delete("/{member_id}/app-access", status_code=204)

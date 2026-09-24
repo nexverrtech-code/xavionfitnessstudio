@@ -64,7 +64,7 @@ const REFERENCE: Record<PaymentMethod, { label: string; placeholder: string; hin
   CASH: { label: 'Receipt book no.', placeholder: 'Optional' },
   UPI: { label: 'UTR / UPI reference', placeholder: '12-digit UTR from the UPI app', hint: 'Check the credit in the gym’s UPI app before confirming.' },
   BANK_TRANSFER: { label: 'Bank reference', placeholder: 'UTR / IMPS / NEFT reference', hint: 'Check the bank statement before confirming.' },
-  CARD_MANUAL: { label: 'Card slip / approval no.', placeholder: 'Optional', hint: 'Card payments are taken on the gym’s own terminal — SmartGym never sees card details.' },
+  CARD_MANUAL: { label: 'Card slip / approval no.', placeholder: 'Optional', hint: 'Card payments are taken on the gym’s own terminal — this app never sees card details.' },
 }
 
 function upiUri(details: UpiDetails, amountPaise: number): string {

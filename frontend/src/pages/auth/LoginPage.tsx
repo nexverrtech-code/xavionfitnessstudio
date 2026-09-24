@@ -94,7 +94,7 @@ export default function LoginPage() {
             <span className="text-xl font-bold text-ink">{config.gym_name}</span>
           </div>
           <h2 className="text-[28px] font-bold tracking-tight text-ink">Welcome back</h2>
-          <p className="mt-1.5 text-sm text-muted">Sign in to continue to {config.gym_name}.</p>
+          <p className="mt-1.5 text-sm text-muted">Sign in to continue{config.gym_name ? ` to ${config.gym_name}` : ''}.</p>
 
           {sessionExpired && !formError && (
             <p role="status" className="mt-5 rounded-xl bg-warning-50 px-3.5 py-2.5 text-sm text-warning-800 dark:bg-warning-500/10 dark:text-warning-300">
@@ -113,7 +113,7 @@ export default function LoginPage() {
               required
               autoComplete="username"
               autoCapitalize="none"
-              placeholder="you@gym.com · GYM000123 · 98765 43210"
+              placeholder={`you@gym.com · ${config.member_code_prefix}000123 · 98765 43210`}
               error={formState.errors.identifier?.message}
               {...register('identifier')}
               autoFocus
@@ -142,7 +142,7 @@ export default function LoginPage() {
             </Button>
           </form>
           <p className="mt-6 text-center text-[13px] text-muted">
-            Forgot your password? Ask the front desk to reset it.
+            Members: no login yet, or forgot your password? Ask the front desk — they give app access and reset passwords.
             {setup.data?.needs_setup && setup.data.setup_enabled && (
               <span className="mt-2 block">
                 First time setting up?{' '}

@@ -134,8 +134,9 @@ function slug(text: string): string {
   return text.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '')
 }
 
+/** e.g. Xavion_Fitness_Studio_Payment_Report_2026-09-01_to_2026-09-24.csv */
 export function reportFileName(report: ReportData, extension: 'csv' | 'pdf'): string {
-  return `SmartGym_${slug(report.title)}_${report.from}_to_${report.to}.${extension}`
+  return `${slug(report.gym_name) || 'Gym'}_${slug(report.title)}_${report.from}_to_${report.to}.${extension}`
 }
 
 // -- summaries ------------------------------------------------------------------------------------
@@ -252,7 +253,7 @@ function footer(pdf: PdfDocument, left: string): void {
 export async function reportPdf(report: ReportData): Promise<Blob> {
   const columns = REPORT_COLUMNS[report.kind]
   const landscape = columns.length > 6
-  const pdf = new PdfDocument({ landscape, title: `${report.gym_name} - ${report.title}` })
+  const pdf = new PdfDocument({ landscape, title: `${report.gym_name} - ${report.title}`, author: report.gym_name })
   const width = pdf.width - MARGIN * 2
   const bottom = pdf.height - 48
 
@@ -347,7 +348,7 @@ export async function downloadReport(report: ReportData, format: 'csv' | 'pdf'):
 
 // -- receipt -------------------------------------------------------------------------------------------
 export async function receiptPdf(receipt: Receipt): Promise<Blob> {
-  const pdf = new PdfDocument({ title: `Receipt ${receipt.receipt_number}` })
+  const pdf = new PdfDocument({ title: `${receipt.gym.name} - Receipt ${receipt.receipt_number}`, author: receipt.gym.name })
   const width = pdf.width - MARGIN * 2
   const right = pdf.width - MARGIN
 
@@ -425,5 +426,5 @@ export async function receiptPdf(receipt: Receipt): Promise<Blob> {
 }
 
 export async function downloadReceipt(receipt: Receipt): Promise<void> {
-  saveBlob(await receiptPdf(receipt), `${receipt.receipt_number}.pdf`)
+  saveBlob(await receiptPdf(receipt), `${slug(receipt.gym.name) || 'Gym'}_Receipt_${receipt.receipt_number}.pdf`)
 }

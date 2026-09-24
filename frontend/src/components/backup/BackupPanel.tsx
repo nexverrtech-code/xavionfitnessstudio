@@ -240,7 +240,7 @@ function VerifyStep({ manifest, onVerified }: { manifest: BackupManifest; onVeri
     <div className="space-y-4">
       {error && <Alert>{error}</Alert>}
       <p className="text-sm text-ink-2">
-        Open the file you saved. SmartGym re-reads it on this device, checks every file against the SHA-256 checksums in metadata.json and counts the rows — so you know the
+        Open the file you saved. This page re-reads it on your device, checks every file against the SHA-256 checksums in metadata.json and counts the rows — so you know the
         backup is complete before anything is removed.
       </p>
       <label

@@ -137,7 +137,7 @@ export async function readZip(buffer: ArrayBuffer): Promise<Map<string, Uint8Arr
     let data: Uint8Array
     if (method === 0) data = raw
     else if (method === 8) data = await inflateRaw(raw)
-    else throw new Error(`${name} uses a compression method SmartGym can't read.`)
+    else throw new Error(`${name} uses a compression method this app can't read.`)
     if (crc32(data) !== crc) throw new Error(`${name} is damaged (checksum mismatch). Download the backup again.`)
     files.set(name.split('/').pop() ?? name, data)
   }

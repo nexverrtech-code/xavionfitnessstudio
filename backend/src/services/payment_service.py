@@ -28,6 +28,7 @@ from repositories.plans import PlanRepository
 from utils.formatting import format_date, format_inr, member_code_candidates, receipt_number
 from utils.upi import build_upi_uri, normalize_reference, normalize_utr
 
+from . import settings_service
 from .context import Ctx
 from .membership_rules import coverage_state, membership_out
 from .notification_service import NotificationService
@@ -132,7 +133,8 @@ class PaymentService:
 
     # -- UPI details (desk QR and member app) ----------------------------------------------------
     async def upi_details(self, *, member_code: str, plan: dict[str, Any]) -> dict[str, Any]:
-        settings = await self.ctx.settings()
+        # Read fresh: a changed UPI ID must never send a member's money to the old account.
+        settings = await settings_service.get_settings(self.ctx.db, fresh=True)
         if not (settings["upi_enabled"] and settings["upi_id"]):
             raise Conflict("UPI payments are not set up yet. Please pay at the front desk.")
         payee = settings["upi_name"] or settings["gym_name"]

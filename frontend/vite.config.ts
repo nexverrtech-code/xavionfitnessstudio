@@ -15,6 +15,12 @@ function smartgymPwa(apiUrl: string): Plugin {
   return {
     name: 'smartgym-pwa',
     apply: 'build',
+    transformIndexHtml(html) {
+      // Same origin (/api on this domain): the installable app is named after the gym, live
+      // from Settings. Another API origin keeps the static fallback manifest.
+      if (/^https?:\/\//.test(apiUrl)) return html
+      return html.replace('<link rel="manifest" href="/manifest.webmanifest" />', '<link rel="manifest" href="/api/manifest.webmanifest" />')
+    },
     generateBundle(_options, bundle) {
       const files = Object.keys(bundle)
       const version = createHash('sha256').update(files.sort().join('|')).digest('hex').slice(0, 12)

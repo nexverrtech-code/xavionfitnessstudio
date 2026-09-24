@@ -109,11 +109,13 @@ export class PdfDocument {
   private pages: string[][] = []
   private current = 0
   private title: string
+  private author: string
 
-  constructor(options: { landscape?: boolean; title?: string } = {}) {
+  constructor(options: { landscape?: boolean; title?: string; author?: string } = {}) {
     this.width = options.landscape ? A4.height : A4.width
     this.height = options.landscape ? A4.width : A4.height
-    this.title = options.title ?? 'SmartGym'
+    this.title = options.title ?? 'Document'
+    this.author = options.author ?? ''
     this.addPage()
   }
 
@@ -217,7 +219,8 @@ export class PdfDocument {
     objects[catalogId - 1] = latin1(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)
     objects[pagesId - 1] = latin1(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`)
     const created = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
-    const infoId = add(`<< /Title (${escape(encode(this.title))}) /Producer (SmartGym) /CreationDate (D:${created}Z) >>`)
+    const author = this.author ? ` /Author (${escape(encode(this.author))}) /Creator (${escape(encode(this.author))})` : ''
+    const infoId = add(`<< /Title (${escape(encode(this.title))})${author} /CreationDate (D:${created}Z) >>`)
 
     const parts: Uint8Array[] = [latin1('%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n')]
     let length = parts[0].length

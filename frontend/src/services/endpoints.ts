@@ -167,7 +167,9 @@ export const membersApi = {
   activity: (id: number) => get<{ items: ActivityEvent[] }>(`/members/${id}/activity`),
   qr: (id: number) => get<{ member_id: number; member_code: string; name: string; payload: string }>(`/members/${id}/qr`),
   resetQr: (id: number) => post<{ member_id: number; payload: string }>(`/members/${id}/qr/reset`),
-  enableApp: (id: number) => post<Credentials>(`/members/${id}/app-access`),
+  /** Give, reset or re-enable the member's app login; without a password a one-time one is generated. */
+  enableApp: (id: number, body: { password?: string | null; must_change_password?: boolean } = {}) =>
+    post<Credentials>(`/members/${id}/app-access`, body),
   disableApp: (id: number) => del(`/members/${id}/app-access`),
 }
 

@@ -16,7 +16,7 @@ import { authApi } from '@/services/endpoints'
 import { applyServerErrors } from '@/utils/forms'
 
 export default function SetupPage() {
-  useDocumentTitle('Set up SmartGym')
+  useDocumentTitle('Set up your gym')
   const { user, applySession } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
@@ -55,7 +55,7 @@ export default function SetupPage() {
               <p>
                 {status.data?.needs_setup
                   ? 'First-run setup is disabled. Set a SETUP_TOKEN Worker secret, or create the admin with scripts/create_admin.py.'
-                  : 'SmartGym is already set up.'}
+                  : 'This gym is already set up.'}
               </p>
               <Link to="/login" className="font-semibold text-accent-700 hover:underline dark:text-accent-300">
                 Go to sign in

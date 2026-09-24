@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Ruler,
   Trash2,
-  UserX,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,11 +24,11 @@ import { PaymentDetailDialog } from '@/components/billing/PaymentDetailDialog'
 import { RefundDialog } from '@/components/billing/RefundDialog'
 import { MemberPicker } from '@/components/members/MemberPicker'
 import { AttendanceCalendar } from '@/components/members/AttendanceCalendar'
-import { CredentialsDialog } from '@/components/members/CredentialsDialog'
+import { ACCESS_LABEL, accessState } from '@/components/members/AppAccessDialog'
 import { MetricTiles } from '@/components/training/MetricTiles'
 import { WorkoutBuilder } from '@/components/training/WorkoutBuilder'
 import { WorkoutPlanCard } from '@/components/training/WorkoutPlanCard'
-import { StatusBadge } from '@/components/ui/Badge'
+import { Pill, StatusBadge } from '@/components/ui/Badge'
 import { Button, IconButton } from '@/components/ui/Button'
 import { Card, CardHeader, KeyValue } from '@/components/ui/Card'
 import { DataList } from '@/components/ui/DataList'
@@ -43,7 +42,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { invalidate, useApi } from '@/hooks/useApi'
 import { useReceipt } from '@/hooks/useReceipt'
 import { membersApi, membershipsApi, progressApi, workoutsApi } from '@/services/endpoints'
-import type { ActivityEvent, Credentials, Measurement, MemberListItem, MemberWorkspace, Metric, Payment, Workout } from '@/types'
+import type { ActivityEvent, Measurement, MemberListItem, MemberWorkspace, Metric, Payment, Workout } from '@/types'
 import { formatDate, formatMoney, formatTime, METHOD_LABELS, relativeTime, todayISO } from '@/utils/format'
 import { METRIC_META } from '@/utils/metrics'
 
@@ -95,24 +94,9 @@ export function ActivityList({ items, limit }: { items: ActivityEvent[]; limit?:
 }
 
 // -- Overview --------------------------------------------------------------------------------
-export function OverviewTab({ member, staff }: TabProps) {
-  const toast = useToast()
+export function OverviewTab({ member, staff, onManageAccess }: TabProps & { onManageAccess?: () => void }) {
   const activity = useApi(`member:${member.id}:activity`, () => membersApi.activity(member.id))
-  const [credentials, setCredentials] = useState<Credentials | null>(null)
-  const [confirmRevoke, setConfirmRevoke] = useState(false)
-  const [busy, setBusy] = useState(false)
-
-  const enableApp = async () => {
-    setBusy(true)
-    try {
-      setCredentials(await membersApi.enableApp(member.id))
-      invalidate(`member:${member.id}`)
-    } catch (error) {
-      toast.fromError(error)
-    } finally {
-      setBusy(false)
-    }
-  }
+  const access = accessState(member.app)
 
   return (
     <div className="grid gap-4 lg:grid-cols-5">
@@ -138,30 +122,24 @@ export function OverviewTab({ member, staff }: TabProps) {
       <div className="space-y-4 lg:col-span-2">
         {staff && (
           <Card>
-            <CardHeader icon={KeyRound} title="Member app access" description={member.app.enabled ? `Signs in with ${member.app.login}` : 'No login yet'} />
+            <CardHeader
+              icon={KeyRound}
+              title="Member app access"
+              action={<Pill tone={ACCESS_LABEL[access].tone}>{ACCESS_LABEL[access].label}</Pill>}
+            />
             <div className="space-y-3 px-5 pb-5">
-              {member.app.enabled ? (
-                <>
-                  <p className="text-[13px] text-muted">
-                    {member.app.must_change_password ? 'Waiting for first sign-in (temporary password).' : member.app.last_login_at ? `Last signed in ${relativeTime(member.app.last_login_at)}.` : 'Has not signed in yet.'}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" icon={KeyRound} loading={busy} onClick={enableApp}>
-                      Reset password
-                    </Button>
-                    <Button size="sm" variant="ghost" icon={UserX} onClick={() => setConfirmRevoke(true)} className="text-danger-600">
-                      Revoke access
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-[13px] text-muted">Members use the app to see their membership, renew with UPI and show their check-in QR.</p>
-                  <Button size="sm" icon={KeyRound} loading={busy} onClick={enableApp}>
-                    Create login
-                  </Button>
-                </>
-              )}
+              <p className="text-[13px] text-muted">
+                {access === 'none'
+                  ? 'No login yet — the member can’t open the app until you give access.'
+                  : access === 'off'
+                    ? 'Turned off — the member can’t sign in.'
+                    : access === 'pending'
+                      ? `Signs in with ${member.app.login}. Waiting for their first sign-in.`
+                      : `Signs in with ${member.app.login}. ${member.app.last_login_at ? `Last signed in ${relativeTime(member.app.last_login_at)}.` : 'Hasn’t signed in yet.'}`}
+              </p>
+              <Button size="sm" variant={access === 'none' || access === 'off' ? 'primary' : 'secondary'} icon={KeyRound} onClick={onManageAccess}>
+                {access === 'none' ? 'Give app access' : access === 'off' ? 'Turn access back on' : 'Manage app access'}
+              </Button>
             </div>
           </Card>
         )}
@@ -203,24 +181,6 @@ export function OverviewTab({ member, staff }: TabProps) {
           </div>
         </Card>
       </div>
-      <CredentialsDialog credentials={credentials} subject={member.name} onClose={() => setCredentials(null)} title="Member login ready" />
-      <ConfirmDialog
-        open={confirmRevoke}
-        onClose={() => setConfirmRevoke(false)}
-        title="Revoke member app access?"
-        message={`${member.name} will be signed out and won't be able to use the member app until you create a new login.`}
-        confirmLabel="Revoke access"
-        onConfirm={async () => {
-          try {
-            await membersApi.disableApp(member.id)
-            invalidate(`member:${member.id}`)
-            toast.success('Access revoked')
-          } catch (error) {
-            toast.fromError(error)
-            throw error
-          }
-        }}
-      />
     </div>
   )
 }

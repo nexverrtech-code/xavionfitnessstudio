@@ -67,7 +67,7 @@ export function NotifyDialog({ open, onClose, memberId, memberName }: { open: bo
         />
         <p className="flex items-start gap-2 text-[13px] text-muted">
           <BellRing className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Delivered inside the SmartGym member app only.
+          Delivered inside the member app only.
         </p>
       </form>
     </Dialog>
