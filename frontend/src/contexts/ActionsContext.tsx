@@ -32,7 +32,8 @@ interface Actions {
   addMeasurement: (member: MemberRef) => void
   sendNotification: (member: MemberRef) => void
   createWorkout: (member: MemberRef) => void
-  markAttendance: (member: MemberRef) => Promise<void>
+  /** No action: like a scan (check in, or out when inside). 'IN' / 'OUT' make it explicit. */
+  markAttendance: (member: MemberRef, action?: 'IN' | 'OUT') => Promise<void>
 }
 
 const ActionsContext = createContext<Actions | null>(null)
@@ -59,10 +60,10 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
   useHotkey('mod+k', () => setOpen((current) => (current?.kind === 'palette' ? null : { kind: 'palette' })), { enabled: isTeam })
 
   const markAttendance = useCallback(
-    async (member: MemberRef) => {
+    async (member: MemberRef, action?: 'IN' | 'OUT') => {
       try {
-        const result = await attendanceApi.mark(member.id)
-        invalidate(`member:${member.id}`, 'attendance', 'dashboard')
+        const result = await attendanceApi.mark(member.id, action)
+        invalidate(`member:${member.id}`, 'attendance', 'dashboard:summary', 'dashboard:activity')
         if (result.ok) toast.success(result.message, { description: result.member?.name })
         else toast.warning(result.message, { description: result.member?.name })
       } catch (error) {

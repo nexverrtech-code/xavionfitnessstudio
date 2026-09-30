@@ -44,7 +44,7 @@ function toValues(member?: MemberWorkspace | null): MemberValues {
 export function MemberFormDialog({ open, onClose, member, onCreated, onSaved, onManageAccess }: MemberFormDialogProps) {
   const toast = useToast()
   const editing = !!member
-  const trainers = useApi(open ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'))
+  const trainers = useApi(open ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'), { freshMs: 600_000 })
   const {
     register,
     handleSubmit,

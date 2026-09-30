@@ -27,7 +27,7 @@ export default function ProgressChart({ history }: { history: Measurement[] }) {
 
   return (
     <div>
-      <div className="no-scrollbar mb-3 flex gap-1.5 overflow-x-auto" role="radiogroup" aria-label="Metric">
+      <div className="mb-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Metric">
         {available.map((m) => (
           <button
             key={m}

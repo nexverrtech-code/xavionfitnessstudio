@@ -92,17 +92,26 @@ class ReportRepository(Repository):
         )
 
     # -- attendance --------------------------------------------------------------------------------
-    async def attendance_daily(self, start: str, end: str) -> Result:
-        return await self.db.run(
-            "SELECT attendance_date AS date, COUNT(*) AS visits, COUNT(DISTINCT member_id) AS members FROM attendance "
-            "WHERE attendance_date BETWEEN ?1 AND ?2 GROUP BY attendance_date ORDER BY attendance_date",
-            [start, end],
+    async def attendance_daily(self, start: str, end: str) -> list[Result]:
+        """Per day: members present (once each, however many visits) and visits; plus the number of
+        different members over the whole period."""
+        return await self.db.batch(
+            [
+                (
+                    "SELECT attendance_date AS date, COUNT(DISTINCT member_id) AS members, COUNT(*) AS visits FROM attendance "
+                    "WHERE attendance_date BETWEEN ?1 AND ?2 GROUP BY attendance_date ORDER BY attendance_date",
+                    [start, end],
+                ),
+                ("SELECT COUNT(DISTINCT member_id) AS c FROM attendance WHERE attendance_date BETWEEN ?1 AND ?2", [start, end]),
+            ]
         )
 
     async def attendance_rows(self, start: str, end: str, cap: int) -> JsonRows:
         return await self.db.rows_json(
             f"SELECT a.attendance_date, m.member_code, m.name, {_iso('a.check_in')} AS check_in, "
-            f"{_iso('a.check_out')} AS check_out, a.method FROM attendance a JOIN members m ON m.id = a.member_id "
+            f"{_iso('a.check_out')} AS check_out, "
+            "CAST(round((julianday(a.check_out) - julianday(a.check_in)) * 1440) AS INTEGER) AS minutes, "
+            "a.method FROM attendance a JOIN members m ON m.id = a.member_id "
             "WHERE a.attendance_date BETWEEN ?1 AND ?2 ORDER BY a.attendance_date, a.check_in LIMIT ?3",
             [start, end, cap],
         )

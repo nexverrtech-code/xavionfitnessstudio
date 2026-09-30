@@ -216,13 +216,17 @@ export function MembershipTrendChart({ data }: { data: ChartsData['membership_tr
   )
 }
 
+/** Members present per day (a member with several visits counts once); visits in the tooltip. */
 export function AttendanceTrendChart({ data }: { data: ChartsData['attendance_trend'] }) {
-  const total = data.reduce((sum, d) => sum + d.visits, 0)
+  const members = (d: ChartsData['attendance_trend'][number]) => d.members ?? d.visits
+  const open = data.filter((d) => d.visits > 0)
+  const average = open.length ? Math.round(open.reduce((sum, d) => sum + members(d), 0) / open.length) : 0
+  const visits = data.reduce((sum, d) => sum + d.visits, 0)
   return (
     <ChartCard
       title="Attendance trend"
-      description={`${formatNumber(total)} check-ins in the last 30 days`}
-      table={{ headers: ['Date', 'Check-ins'], rows: [...data].reverse().map((d) => [formatDate(d.date, { withYear: false }), d.visits]) }}
+      description={`${formatNumber(average)} members a day on average · ${formatNumber(visits)} visits in 30 days`}
+      table={{ headers: ['Date', 'Members present', 'Visits'], rows: [...data].reverse().map((d) => [formatDate(d.date, { withYear: false }), members(d), d.visits]) }}
       chart={
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 4 }}>
@@ -243,12 +247,15 @@ export function AttendanceTrendChart({ data }: { data: ChartsData['attendance_tr
                 active && payload?.length ? (
                   <TooltipBox
                     title={formatDate(String(label), { weekday: true })}
-                    rows={[{ key: 'visits', label: 'Check-ins', value: formatNumber(Number(payload[0].value)), color: SERIES.a }]}
+                    rows={[
+                      { key: 'members', label: 'Members present', value: formatNumber(Number(payload[0].value)), color: SERIES.a },
+                      { key: 'visits', label: 'Visits', value: formatNumber(Number((payload[0].payload as { visits?: number }).visits ?? 0)), color: 'transparent' },
+                    ]}
                   />
                 ) : null
               }
             />
-            <Bar dataKey="visits" fill={SERIES.a} maxBarSize={16} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="members" name="Members present" fill={SERIES.a} maxBarSize={16} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       }

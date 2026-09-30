@@ -73,8 +73,8 @@ export default function TrainerDashboardPage() {
       ) : (
         <section aria-label="Key metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard label="Assigned Members" icon={Users} value={o?.assigned_members ?? 0} hint={o ? `${o.active_members} with an active plan` : undefined} loading={loading} to="/members" />
-          <StatCard label="Today's Sessions" icon={CalendarCheck2} tone="blue" value={o?.today_sessions.length ?? 0} hint="Checked in today" loading={loading} />
-          <StatCard label="This Week" icon={CheckCircle2} tone="green" value={o?.week_attendance ?? 0} hint="Visits by your members" loading={loading} />
+          <StatCard label="Today's Sessions" icon={CalendarCheck2} tone="blue" value={o?.today_sessions.length ?? 0} hint="Visits today" loading={loading} />
+          <StatCard label="This Week" icon={CheckCircle2} tone="green" value={o?.week_attendance ?? 0} hint="Days present by your members" loading={loading} />
           <StatCard label="Workout Plans" icon={Dumbbell} tone="brand" value={o?.active_workouts ?? 0} hint="Active plans" loading={loading} to="/workouts" />
           <StatCard label="Progress Alerts" icon={AlertCircle} tone="amber" value={o?.alerts.length ?? 0} hint={alertSummary(o?.alerts ?? [])} loading={loading} />
         </section>

@@ -18,7 +18,7 @@ export default function PortalLayout() {
   return (
     <div className="min-h-dvh">
       <OfflineBanner />
-      <header className="sticky top-0 z-20 border-b border-line/70 bg-canvas/85 backdrop-blur-md">
+      <header className="pt-safe sticky top-0 z-20 border-b border-line/70 bg-canvas/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-3xl items-center gap-3 px-4">
           <Link to="/portal" className="flex min-w-0 items-center gap-2.5" aria-label="Home">
             <LogoMark className="size-8" />

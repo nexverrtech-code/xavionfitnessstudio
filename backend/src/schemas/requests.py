@@ -64,6 +64,8 @@ class MemberBase(Model):
     address: optional_text(250, "Address") = None
     emergency_contact: optional_text(80, "Emergency contact") = None
     trainer_id: OptionalId = None
+    # WhatsApp / email receipts and reminders (a member can also turn them off in the app).
+    messages: bool = True
 
     @field_validator("date_of_birth")
     @classmethod
@@ -104,6 +106,7 @@ class ProfileUpdate(Model):
     email: OptionalEmail = None
     address: optional_text(250, "Address") = None
     emergency_contact: optional_text(80, "Emergency contact") = None
+    messages: bool | None = None  # omitted: unchanged
 
 
 # -- trainers --------------------------------------------------------------------------------
@@ -148,7 +151,8 @@ class DeskPaymentIn(Model):
 
 class UpiSubmission(Model):
     plan_id: int
-    utr: str = Field(min_length=12, max_length=20)
+    # Optional: staff verify the credit in the gym's UPI / bank app either way; the UTR only helps.
+    utr: Annotated[str | None, BeforeValidator(_empty_to_none), Field(max_length=20)] = None
 
 
 class RejectPaymentIn(Model):
@@ -172,6 +176,8 @@ class ScanIn(Model):
 
 class MarkAttendanceIn(Model):
     member_id: int
+    # Omitted: behaves like a scan (check in, or check out when the member is inside).
+    action: Literal["IN", "OUT"] | None = None
 
 
 # -- workouts & progress -----------------------------------------------------------------------------

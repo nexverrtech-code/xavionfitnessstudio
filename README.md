@@ -93,9 +93,10 @@ backend/                       Cloudflare Python Worker
   src/backup/datasets.py       What a backup contains and how each table is exported, archived and restored
   src/jobs/scheduler.py        The daily cron job ("jobs", because "workers" is the Cloudflare SDK module)
   src/utils/                   Formatting, UPI links, HTTP helpers, Cloudflare API (Time Travel)
-  migrations/0001–0006         Core, payments, operations, data management, indexes, integrity triggers
+  migrations/0001–0008         Core, payments, operations, data management, indexes, integrity triggers,
+                               attendance visits (0007), dashboard chart cache (0008)
   scripts/                     seed_dev.py · dev_server.py · create_admin.py · smoke_test.py
-  tests/                       pytest suite (69 tests)
+  tests/                       pytest suite (86 tests)
   wrangler.jsonc               D1 binding, cron, rate limiter, public vars
 
 frontend/                      React PWA for Cloudflare Pages
@@ -163,7 +164,7 @@ npm run dev                             # http://localhost:5173 — Vite forward
 ## Tests and checks
 
 ```bash
-cd backend  && uv run pytest                  # 69 tests: auth, members, app access, payments, memberships, attendance,
+cd backend  && uv run pytest                  # 86 tests: auth, members, app access, payments, memberships, attendance,
                                               # permissions, notifications, reports, backups, storage
 cd frontend && npm run build                  # strict type-check + production build (emits sw.js and _headers)
 
@@ -227,6 +228,14 @@ Choose **one** way to serve it:
 
 The build generates `_headers` with the CSP (including your API origin when it's separate), security headers and immutable caching for hashed assets.
 
+### Updating a live site (this release: migrations 0007 and 0008)
+
+A push to `main` that touches `backend/` deploys the Worker through GitHub Actions; **it does not apply migrations**. Run them yourself, in this order:
+
+1. Deploy the Worker (push, or `uv run pywrangler deploy`). The new Worker works with the old schema: until step 2, a member's second visit on the same day is refused with a clear message.
+2. `cd backend && npx wrangler d1 migrations apply smartgym-db --remote`: 0007 drops the one-row-per-day index (several visits a day), 0008 adds the small `dashboard_cache` table.
+3. Deploy the frontend (`npm run build`, then `npx wrangler pages deploy dist --project-name smartgym --branch main`).
+
 ### 6. After deploying
 
 1. **Settings → Gym:** name, address, phone. **Settings → Payments:** your UPI ID and payee name.
@@ -268,7 +277,7 @@ For local development put the same names in `backend/.dev.vars` (copy `.dev.vars
 
 ### In-app settings (Settings screen, `settings` table)
 
-Gym profile · member code prefix · Direct UPI (on/off, UPI ID, payee name) · which events notify members · expiry reminders on/off · attendance (check-out on second scan, grace days, repeat-scan cooldown) · data retention (notification retention days, archive suggestion age, storage alerts).
+Gym profile · member code prefix · Direct UPI (on/off, UPI ID, payee name) · which events notify members · expiry reminders on/off · attendance (check-in and check-out on/off, visits allowed per day, longest visit, repeat-scan window, grace days) · data retention (notification retention days, archive suggestion age, storage alerts).
 
 **Saved settings apply everywhere at once.** The gym name appears on every screen and browser tab, in the installed app's name (`/api/manifest.webmanifest`), the iOS home-screen label, receipts, reports, backup file names and member messages. After *Save*:
 - the admin's screens switch immediately (the saved values from the server are used directly; a new currency re-renders every screen);
@@ -304,9 +313,13 @@ Desk payments carry an `Idempotency-Key`, so a double-tap or retry never records
 ## Attendance
 
 - Each member has a QR pass `SG1.<random token>` — the token is opaque and contains no personal data. *Issue new QR* invalidates old screenshots.
-- Scanning (camera or USB scanner), member ID or phone number checks the member in. One row per member per day (enforced by a unique index); repeat scans answer *Already checked in*, and an optional second scan records check-out.
+- Scanning (camera or USB scanner), member ID or phone number records a **visit**. Members may come several times a day (morning, afternoon, night): scans alternate, so arriving checks in, leaving checks out, and coming back later starts a new visit. Each visit is its own row.
+- **Counted once a day:** the dashboard, member stats, member app, trainer dashboard and reports count *days present*; visits and time in the gym are shown alongside.
+- **Settings → Attendance:** check-in *and* check-out (default) or arrivals only · visits allowed per day (default 5; then *Daily limit reached*) · longest visit (default 4 h: an older open check-in counts as a forgotten check-out, so the next scan starts a new visit) · repeat-scan window (default 10 min: a double scan changes nothing) · grace days after expiry.
+- Safe with several desks: one atomic insert or update per scan, so two desks scanning the same member at once record one visit. Leaving is always allowed, even if the membership was put on hold during the visit; a late-night visit may end after midnight.
+- The log shows one row per member with every visit, *In the gym now*, and a panel to check a member out or remove a mistaken visit. Staff can also check in / check out from the member's page.
 - An expired membership answers **"Membership Expired. Please renew your membership."** (a configurable grace period is available in Settings).
-- Each entry records its method: `QR` or `MANUAL`.
+- Each visit records its method: `QR` or `MANUAL`.
 
 ---
 
@@ -355,7 +368,7 @@ An admin-only page with four tabs.
 
 ## Data model
 
-Migrations are in `backend/migrations/` (0001–0006).
+Migrations are in `backend/migrations/` (0001–0008).
 
 | Table | Purpose |
 |---|---|
@@ -366,7 +379,7 @@ Migrations are in `backend/migrations/` (0001–0006).
 | `memberships` | Member × plan with dates and the amount paid; created only by PAID payments |
 | `payments` | `payment_number`, member, plan, membership, amount, method, `transaction_reference`, status, `payment_date`, `verified_by`/`verified_at`, notes, `created_by` |
 | `refunds` | One recorded refund per payment |
-| `attendance` | One row per member per day: `attendance_date`, check-in/out, `method` |
+| `attendance` | One row per visit: `attendance_date` (the day the visit started), check-in/out, `method` |
 | `workout_plans`, `workout_exercises` | Trainer-made plans (exercise name, sets, reps, weight, rest, notes) |
 | `body_measurements` | weight, height, body_fat, chest, waist, arm, thigh, `recorded_at` |
 | `notifications` | `user_id`, type, message, UNREAD/READ, `read_at` |
@@ -374,10 +387,11 @@ Migrations are in `backend/migrations/` (0001–0006).
 | `settings` | Key/value gym settings |
 | `backups` | Backup / restore / Time Travel history, watermarks, checksum, verified/archived by and at |
 | `storage_snapshots` | One row per day: database size and row counts (for growth trends) |
+| `dashboard_cache` | The dashboard charts' past months and days, computed at most once a day (not business data) |
 
 **Conventions:** money is **integer paise**; timestamps are UTC (`YYYY-MM-DD HH:MM:SS`); calendar dates are gym-local; every list is paginated (20/50/100) and served by an index.
 
-**Integrity enforced by the database, not only the API:** one pending payment per member · a UTR once per method · unique idempotency keys · unique payment numbers · one attendance row per member per day · a payment and its membership belong to the same member · confirmed payments are immutable · members can never be deleted · payments, refunds and memberships can be deleted only by a verified archive.
+**Integrity enforced by the database, not only the API:** one pending payment per member · a UTR once per method · unique idempotency keys · unique payment numbers · one visit per member per check-in time · a payment and its membership belong to the same member · confirmed payments are immutable · members can never be deleted · payments, refunds and memberships can be deleted only by a verified archive.
 
 ---
 
@@ -392,17 +406,32 @@ The system is designed for **Workers Free** (10 ms CPU per request) and **D1 Fre
 - **Heavy work in the browser:** PDFs, CSVs, ZIPs and checksums are built on the admin's device.
 - **Frontend:** lazy route chunks, `useApi` shares identical requests and reuses data younger than 15 s; any change invalidates what it touched.
 - **Every response reports its cost** in `Server-Timing` (D1 trips, statements, rows read and written). Locally, typical calls take 20–45 ms with ≤ 10 ms of Worker time.
+- **Dashboard charts:** past months and days are computed at most once a day (per-isolate memory, then one `dashboard_cache` row); only today and the current month are read live. A change dated in an earlier month reaches the charts the next day (reports are always live).
+- **The notification bell** reads two small counts, and attendance scans refresh only what a visit changes.
+
+**Measured with 5,000 members** (13k memberships, 13k payments, 92k visits; real Workers runtime and D1 engine, rows read per request):
+
+| Request | Rows read |
+|---|---:|
+| QR scan / check-in | 8–23 |
+| Member app home · member attendance | 62 · 16 |
+| Dashboard (summary 11.7k, charts 29k, renewals 2.9k, activity 68) | ≈ 44k |
+| Members list page · payments (this month) | 5.1k · 3.1k |
+
+Twenty desks scanning the same member at the same moment record exactly one visit, and 200 mixed requests from 20 parallel clients all succeed.
+
+**What limits a 5,000-member gym is the free D1 read allowance (5M rows a day), not speed.** Scans and the member app cost almost nothing; roughly a hundred dashboard visits plus normal front-desk use fit in a day. For headroom, **Workers Paid ($5 a month)** includes 25 billion D1 rows read a month (and more CPU per request, so `PASSWORD_ITERATIONS` can go up). A Cloudflare WAF rate-limiting rule on `/api/*` (one rule is free) stops floods at the edge before they count as Worker requests.
 
 ---
 
 ## Security
 
 - **Passwords:** PBKDF2-SHA256 + per-user salt + pepper, constant-time comparison; a dummy hash runs for unknown users so timing doesn't reveal which logins exist.
-- **Brute force:** accounts lock for 15 minutes after 5 wrong passwords, plus a per-IP Workers Rate Limiting binding (`LOGIN_LIMITER`).
+- **Brute force:** accounts lock for 15 minutes after 5 wrong passwords, at sign-in *and* on the change-password form (so a stolen session can't guess the current password), plus a per-IP Workers Rate Limiting binding (`LOGIN_LIMITER`, 10 sign-ins a minute per IP; members signing in together on the gym's Wi-Fi share one IP).
 - **Tokens:** HS256 JWTs with per-role lifetimes. A `token_version` makes password changes, *sign out everywhere*, disabling a user and revoking app access take effect (within 30 s on other isolates, which cache user records briefly). Temporary passwords must be changed at first sign-in.
 - **Authorisation:** role checks on every route; trainers limited to assigned members; members only reach `/api/me/*`; restore and Time Travel are admin-only and require explicit confirmation.
 - **No card data** is ever collected; UPI is paid directly to the gym, and SmartGym never asks for a UPI PIN.
-- **Web:** strict CSP (no third-party scripts or frames), `X-Frame-Options: DENY`, `nosniff`, strict referrer policy, `no-store` on API responses, explicit CORS allowlist, 256 KB body limit, unknown request fields rejected, formula-safe CSV exports.
+- **Web:** strict CSP (no third-party scripts, frames or plugins), HSTS (2 years), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `nosniff`, strict referrer policy, `no-store` on API responses, explicit CORS allowlist, 256 KB body limit, unknown request fields rejected, formula-safe CSV exports.
 - **Errors:** human-readable messages; stack traces and SQL never reach the client.
 - **Secrets:** only as Worker secrets or in the git-ignored `.dev.vars`. D1 is reachable only through the Worker binding; the frontend has only `VITE_API_URL`.
 

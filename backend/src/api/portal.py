@@ -41,7 +41,8 @@ async def profile(ctx: Ctx = Depends(member_ctx)) -> FastJSON:
 
 @router.put("/profile")
 async def update_profile(body: ProfileUpdate, ctx: Ctx = Depends(member_ctx)) -> FastJSON:
-    return ok(await _portal(ctx).update_profile(email=body.email, address=body.address, emergency_contact=body.emergency_contact))
+    return ok(await _portal(ctx).update_profile(email=body.email, address=body.address, emergency_contact=body.emergency_contact,
+                                                messages=body.messages))
 
 
 @router.get("/membership")

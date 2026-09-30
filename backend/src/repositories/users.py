@@ -62,7 +62,8 @@ class UserRepository(Repository):
 
     async def change_password(self, user_id: int, password_hash: str, token_version: int, now: str) -> None:
         await self.db.run(
-            "UPDATE users SET password_hash = ?2, must_change_password = 0, token_version = ?3, updated_at = ?4 WHERE id = ?1",
+            "UPDATE users SET password_hash = ?2, must_change_password = 0, token_version = ?3, updated_at = ?4, "
+            "failed_logins = 0, locked_until = NULL WHERE id = ?1",
             [user_id, password_hash, token_version, now],
         )
 

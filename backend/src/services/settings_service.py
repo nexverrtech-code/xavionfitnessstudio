@@ -35,10 +35,15 @@ DEFAULTS: dict[str, str] = {
     "notify_activation": "1",
     "notify_renewal": "1",
     "notify_trainer": "1",
-    # Attendance.
-    "attendance_checkout": "0",
+    # Automatic WhatsApp / email messages (work only once the provider secrets are set).
+    "whatsapp_enabled": "0",
+    "email_enabled": "0",
+    # Attendance: scans alternate check-in / check-out, several visits a day.
+    "attendance_checkout": "1",
     "attendance_grace_days": "0",
     "attendance_cooldown_minutes": "10",
+    "attendance_max_visit_hours": "4",
+    "attendance_max_visits_per_day": "5",
     # Data retention (agreed with the gym owner).
     "notification_retention_days": "180",
     "archive_after_months": "24",
@@ -47,11 +52,13 @@ DEFAULTS: dict[str, str] = {
 
 BOOL_KEYS = {
     "upi_enabled", "reminders_enabled", "notify_payment", "notify_activation", "notify_renewal", "notify_trainer",
-    "attendance_checkout", "storage_alerts_enabled",
+    "attendance_checkout", "storage_alerts_enabled", "whatsapp_enabled", "email_enabled",
 }
 INT_KEYS = {
     "attendance_grace_days": (0, 7),
     "attendance_cooldown_minutes": (1, 240),
+    "attendance_max_visit_hours": (1, 12),
+    "attendance_max_visits_per_day": (1, 20),
     "notification_retention_days": (30, 730),
     "archive_after_months": (6, 120),
 }
@@ -126,6 +133,15 @@ async def update_settings(db: Database, clock: Clock, changes: dict[str, Any]) -
         upi_id = validated.get("upi_id", current["upi_id"])
         if enabled and not upi_id:
             raise ValidationFailed("Add your UPI ID to accept UPI payments.", fields={"upi_id": "Required when UPI is on"})
+    if "attendance_cooldown_minutes" in changes or "attendance_max_visit_hours" in changes:
+        current = await get_settings(db)
+        cooldown = int(validated.get("attendance_cooldown_minutes", current["attendance_cooldown_minutes"]))
+        hours = int(validated.get("attendance_max_visit_hours", current["attendance_max_visit_hours"]))
+        if cooldown >= hours * 60:
+            raise ValidationFailed(
+                "The duplicate-scan window must be shorter than the longest visit.",
+                fields={"attendance_cooldown_minutes": f"Must be less than {hours * 60} minutes (the longest visit)"},
+            )
     if validated:
         await SettingsRepository(db).save(validated, clock.now_ts())
     invalidate_cache()

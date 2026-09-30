@@ -28,6 +28,17 @@ def test_lockout_after_five_failures(client, admin):
     assert client.post("/api/auth/login", json={"identifier": ADMIN_EMAIL, "password": ADMIN_PASSWORD}).status_code == 429
 
 
+def test_guessing_the_current_password_counts_toward_lockout(client, admin):
+    """A stolen session cannot be used to guess the password on the change-password form."""
+    wrong = {"current_password": "Wrong@12345", "new_password": "Brand@New2026"}
+    for _ in range(4):
+        assert client.post("/api/auth/change-password", json=wrong, headers=admin).status_code == 422
+    assert client.post("/api/auth/change-password", json=wrong, headers=admin).status_code == 429
+    right = {"current_password": ADMIN_PASSWORD, "new_password": "Brand@New2026"}
+    assert client.post("/api/auth/change-password", json=right, headers=admin).status_code == 429  # locked, even when right
+    assert client.post("/api/auth/login", json={"identifier": ADMIN_EMAIL, "password": ADMIN_PASSWORD}).status_code == 429
+
+
 def test_member_signs_in_with_member_id_or_phone_and_must_change_temp_password(client, admin):
     created = create_member(client, admin, phone="9876501234")
     creds = created["credentials"]
@@ -87,7 +98,9 @@ def test_setup_only_when_enabled_and_no_admin(client, db):
 
 
 def test_api_lives_under_api_prefix(client, admin):
-    assert client.get("/api/health").json()["status"] == "ok"
+    health = client.get("/api/health")
+    assert health.json()["status"] == "ok"
+    assert health.headers["x-content-type-options"] == "nosniff" and health.headers["x-frame-options"] == "DENY"
     assert client.get("/v1/auth/me", headers=admin).status_code == 404
 
 

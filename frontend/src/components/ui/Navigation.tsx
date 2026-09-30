@@ -23,7 +23,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: { 
     onChange(items[next].value)
   }
   return (
-    <div role="tablist" className={cn('no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1', className)}>
+    <div role="tablist" className={cn('flex flex-wrap gap-1', className)}>
       {items.map((item, index) => {
         const active = item.value === value
         const Icon = item.icon
@@ -59,7 +59,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: { 
 /** Filter chips; one option is always selected. */
 export function Segmented<T extends string>({ options, value, onChange, className, label }: { options: { value: T; label: string; count?: number }[]; value: T; onChange: (value: T) => void; className?: string; label: string }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cn('no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5', className)}>
+    <div role="radiogroup" aria-label={label} className={cn('flex flex-wrap gap-1.5 py-0.5', className)}>
       {options.map((option) => {
         const active = option.value === value
         return (

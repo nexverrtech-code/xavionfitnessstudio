@@ -119,6 +119,15 @@ export function formatTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit', timeZone }).format(new Date(iso))
 }
 
+/** 45 -> "45 min", 80 -> "1 h 20 min", 120 -> "2 h". */
+export function durationLabel(minutes: number | null | undefined): string {
+  const total = Math.max(0, Math.round(minutes ?? 0))
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  if (!hours) return `${rest} min`
+  return rest ? `${hours} h ${rest} min` : `${hours} h`
+}
+
 export function formatMonth(month: string): string {
   const [y, m] = month.split('-').map(Number)
   return new Intl.DateTimeFormat(LOCALE, { month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, 1)))

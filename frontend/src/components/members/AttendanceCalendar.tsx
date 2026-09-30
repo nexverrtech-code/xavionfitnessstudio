@@ -1,13 +1,8 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { IconButton } from '@/components/ui/Button'
+import type { AttendanceDay } from '@/types'
 import { cn } from '@/utils/cn'
 import { formatTime, todayISO } from '@/utils/format'
-
-interface Visit {
-  date: string
-  check_in: string
-  check_out: string | null
-}
 
 export function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split('-').map(Number)
@@ -15,13 +10,19 @@ export function shiftMonth(month: string, delta: number): string {
   return date.toISOString().slice(0, 7)
 }
 
-/** Month grid: a filled day = a visit. Every visit also appears in the list below it. */
-export function AttendanceCalendar({ month, visits, onMonth }: { month: string; visits: Visit[]; onMonth: (month: string) => void }) {
+function dayLabel(day: AttendanceDay | undefined): string {
+  if (!day) return 'no visit'
+  const count = day.visits?.length ?? 1
+  return `${count} visit${count === 1 ? '' : 's'}, first at ${formatTime(day.check_in)}`
+}
+
+/** Month grid: a filled day = present (however many visits); a small number = visits that day. */
+export function AttendanceCalendar({ month, days, onMonth }: { month: string; days: AttendanceDay[]; onMonth: (month: string) => void }) {
   const [y, m] = month.split('-').map(Number)
   const first = new Date(Date.UTC(y, m - 1, 1))
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const length = new Date(Date.UTC(y, m, 0)).getUTCDate()
   const offset = (first.getUTCDay() + 6) % 7 // Monday first
-  const visited = new Map(visits.map((v) => [v.date, v]))
+  const present = new Map(days.map((d) => [d.date, d]))
   const today = todayISO()
   const label = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(first)
   const isCurrent = month >= today.slice(0, 7)
@@ -30,7 +31,7 @@ export function AttendanceCalendar({ month, visits, onMonth }: { month: string; 
       <div className="mb-3 flex items-center justify-between">
         <IconButton icon={ChevronLeft} label="Previous month" size="icon-sm" onClick={() => onMonth(shiftMonth(month, -1))} />
         <p className="text-sm font-semibold text-ink">
-          {label} · <span className="text-muted">{visits.length} visit{visits.length === 1 ? '' : 's'}</span>
+          {label} · <span className="text-muted">{days.length} day{days.length === 1 ? '' : 's'}</span>
         </p>
         <IconButton icon={ChevronRight} label="Next month" size="icon-sm" disabled={isCurrent} onClick={() => onMonth(shiftMonth(month, 1))} />
       </div>
@@ -43,22 +44,28 @@ export function AttendanceCalendar({ month, visits, onMonth }: { month: string; 
         {Array.from({ length: offset }, (_, i) => (
           <span key={`e${i}`} aria-hidden />
         ))}
-        {Array.from({ length: days }, (_, i) => {
+        {Array.from({ length }, (_, i) => {
           const iso = `${month}-${String(i + 1).padStart(2, '0')}`
-          const visit = visited.get(iso)
+          const day = present.get(iso)
+          const visits = day?.visits?.length ?? 0
           return (
             <span
               key={iso}
               role="gridcell"
-              aria-label={`${i + 1}: ${visit ? `checked in ${formatTime(visit.check_in)}` : 'no visit'}`}
-              title={visit ? `Checked in ${formatTime(visit.check_in)}` : undefined}
+              aria-label={`${i + 1}: ${dayLabel(day)}`}
+              title={day ? dayLabel(day) : undefined}
               className={cn(
-                'flex aspect-square items-center justify-center rounded-lg text-[12px] font-semibold',
-                visit ? 'bg-volt font-semibold text-on-volt' : iso > today ? 'text-faint/60' : 'bg-subtle text-muted',
+                'relative flex aspect-square items-center justify-center rounded-lg text-[12px] font-semibold',
+                day ? 'bg-volt font-semibold text-on-volt' : iso > today ? 'text-faint/60' : 'bg-subtle text-muted',
                 iso === today && 'ring-2 ring-accent-400 ring-offset-2 ring-offset-surface',
               )}
             >
               {i + 1}
+              {visits > 1 && (
+                <span className="absolute right-0.5 top-0.5 rounded-full bg-ink/80 px-1 text-[9px] font-bold leading-[14px] text-canvas" aria-hidden>
+                  {visits}
+                </span>
+              )}
             </span>
           )
         })}

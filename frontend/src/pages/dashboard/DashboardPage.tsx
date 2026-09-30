@@ -274,7 +274,7 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted">Here's what's happening in your gym today.</p>
         </div>
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="flex flex-wrap gap-2">
           {quickActions
             .filter((a) => a.show !== false)
             .map((a) => (
@@ -302,7 +302,17 @@ export default function DashboardPage() {
             icon={CalendarCheck2}
             tone="blue"
             value={formatNumber(s?.attendance.today)}
-            hint={s ? <Delta current={s.attendance.today} previous={s.attendance.yesterday} label="vs yesterday" /> : undefined}
+            hint={
+              s ? (
+                typeof s.attendance.in_gym === 'number' ? (
+                  <span>
+                    <span className="font-semibold text-success-700 dark:text-success-300">{formatNumber(s.attendance.in_gym)} in the gym</span> · {formatNumber(s.attendance.visits_today ?? s.attendance.today)} visits
+                  </span>
+                ) : (
+                  <Delta current={s.attendance.today} previous={s.attendance.yesterday} label="vs yesterday" />
+                )
+              ) : undefined
+            }
             loading={loading}
             to="/attendance?tab=log"
           />

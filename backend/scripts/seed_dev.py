@@ -129,11 +129,13 @@ def main() -> None:
     payments: list[dict] = []
     used_names: set[str] = {name for name, _ in TRAINERS}  # no member shares a trainer's name
     for mid in range(1, args.members + 1):
-        while True:
+        for _ in range(50):
             name = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
             if name not in used_names:
-                used_names.add(name)
                 break
+        else:  # large --members runs outgrow the 864 first/last combinations
+            name = f"{name} {mid}"
+        used_names.add(name)
         if mid == 1:
             name = "Aarav Sharma"
             used_names.add(name)

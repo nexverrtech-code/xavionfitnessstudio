@@ -24,6 +24,7 @@ from api import (
     expenses,
     members,
     memberships,
+    messages,
     notifications,
     payments,
     plans,
@@ -48,7 +49,7 @@ API_PREFIX = "/api"
 MAX_BODY_BYTES = 256 * 1024
 DOC_PATHS = {"/api/docs", "/api/docs/oauth2-redirect", "/api/openapi.json"}
 ROUTERS = (auth, users, members, trainers, plans, memberships, payments, attendance, workouts, progress, notifications,
-           expenses, reports, dashboard, backups, storage, settings, portal)
+           expenses, reports, dashboard, backups, storage, settings, portal, messages)
 
 ConfigProvider = Callable[[dict], AppConfig]
 DbProvider = Callable[[dict, AppConfig], Database]

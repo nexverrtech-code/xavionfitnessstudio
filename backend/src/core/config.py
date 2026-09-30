@@ -64,6 +64,14 @@ class AppConfig:
     cf_account_id: str = ""
     cf_api_token: str = ""
     d1_database_id: str = ""
+    # Optional automatic messages (Settings -> Messages): WhatsApp Cloud API (Meta) and Resend email.
+    # WHATSAPP_TOKEN and RESEND_API_KEY are secrets; the phone number id and sender address are not.
+    whatsapp_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    # Meta retires Graph API versions about two years after release; raise this when it does.
+    whatsapp_api_version: str = "v23.0"
+    resend_api_key: str = ""
+    email_from: str = ""
 
     @property
     def is_production(self) -> bool:
@@ -72,6 +80,14 @@ class AppConfig:
     @property
     def time_travel_api_enabled(self) -> bool:
         return bool(self.cf_account_id and self.cf_api_token and self.d1_database_id)
+
+    @property
+    def whatsapp_configured(self) -> bool:
+        return bool(self.whatsapp_token and self.whatsapp_phone_number_id)
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.resend_api_key and self.email_from)
 
     def origin_allowed(self, origin: str) -> bool:
         return "*" in self.allowed_origins or origin in self.allowed_origins

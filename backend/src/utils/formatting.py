@@ -105,5 +105,13 @@ def receipt_number(payment_number: str) -> str:
     return "RCT" + payment_number[3:] if payment_number.startswith("PAY") else payment_number
 
 
+def duration_label(minutes: int) -> str:
+    """45 -> '45 min', 80 -> '1 h 20 min', 120 -> '2 h'."""
+    hours, rest = divmod(max(0, int(minutes)), 60)
+    if not hours:
+        return f"{rest} min"
+    return f"{hours} h {rest} min" if rest else f"{hours} h"
+
+
 def escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

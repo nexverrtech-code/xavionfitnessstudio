@@ -79,6 +79,7 @@ export const REPORT_COLUMNS: Record<ReportKind, ReportColumn[]> = {
     { key: 'name', label: 'Name', weight: 2 },
     { key: 'check_in', label: 'Check-in', format: 'time', weight: 0.9 },
     { key: 'check_out', label: 'Check-out', format: 'time', weight: 0.9 },
+    { key: 'minutes', label: 'Minutes', format: 'number', weight: 0.75 },
     { key: 'method', label: 'Method', weight: 0.8 },
   ],
   expenses: [
@@ -197,18 +198,22 @@ export function reportSummary(report: ReportData): { stats: SummaryItem[]; break
       }
     }
     case 'attendance': {
-      const daily = (s.daily as Rows<{ date: string; visits: number }>) ?? []
-      const busiest = daily.reduce<{ date: string; visits: number } | null>((best, d) => (!best || d.visits > best.visits ? d : best), null)
+      // "members" = members present that day (several visits by one member count once).
+      const daily = (s.daily as Rows<{ date: string; members?: number; visits: number }>) ?? []
+      const present = (d: { members?: number; visits: number }) => d.members ?? d.visits
+      const attended = Number(s.member_days ?? s.total_visits ?? 0)
+      const busiest = daily.reduce<(typeof daily)[number] | null>((best, d) => (!best || present(d) > present(best) ? d : best), null)
       return {
         stats: [
-          { label: 'Total visits', value: n('total_visits') },
-          { label: 'Days open', value: formatNumber(daily.length) },
-          { label: 'Average per day', value: daily.length ? formatNumber(Math.round(Number(s.total_visits ?? 0) / daily.length)) : '0' },
-          { label: 'Busiest day', value: busiest ? `${formatDate(busiest.date, { withYear: false })} (${formatNumber(busiest.visits)})` : '-' },
+          { label: 'Days attended', value: formatNumber(attended) },
+          { label: 'Visits', value: n('total_visits') },
+          { label: 'Different members', value: s.unique_members === undefined ? '-' : n('unique_members') },
+          { label: 'Members a day', value: daily.length ? formatNumber(Math.round(attended / daily.length)) : '0' },
+          { label: 'Busiest day', value: busiest ? `${formatDate(busiest.date, { withYear: false })} (${formatNumber(present(busiest))})` : '-' },
         ],
-        breakdown: ((s.monthly as Rows<{ month: string; visits: number; days: number }>) ?? []).map((x) => ({
+        breakdown: ((s.monthly as Rows<{ month: string; members?: number; visits: number; days: number }>) ?? []).map((x) => ({
           label: x.month,
-          value: `${formatNumber(x.visits)} visits over ${formatNumber(x.days)} days`,
+          value: `${formatNumber(x.members ?? x.visits)} attended · ${formatNumber(x.visits)} visits over ${formatNumber(x.days)} days`,
         })),
       }
     }

@@ -210,7 +210,7 @@ export default function MemberWorkspacePage() {
               </>
             )}
             <Button variant="secondary" icon={CalendarCheck2} onClick={() => actions.markAttendance({ id: member.id, name: member.name })}>
-              Mark Attendance
+              Check in / out
             </Button>
             <Menu
               label="More actions"
@@ -240,7 +240,7 @@ export default function MemberWorkspacePage() {
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
         <MembershipCard member={member} staff={staff} onRenew={() => actions.collectPayment({ memberId: member.id })} />
         <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-3">
-          <StatCard label="Visits this month" icon={CalendarCheck2} tone="blue" value={member.stats.visits_this_month} hint={`${member.stats.visits_total} total visits`} />
+          <StatCard label="Days this month" icon={CalendarCheck2} tone="blue" value={member.stats.visits_this_month} hint={`${member.stats.visits_total} days in total`} />
           <StatCard label="Last check-in" icon={CalendarClock} tone="slate" value={member.stats.last_check_in ? relativeTime(member.stats.last_check_in) : '—'} hint={member.stats.last_check_in ? 'Most recent visit' : 'No visits yet'} />
           {staff ? (
             <StatCard

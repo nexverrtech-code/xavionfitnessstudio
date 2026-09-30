@@ -3,7 +3,7 @@ range-bounded on indexes so dashboard loads stay cheap in D1 rows read."""
 
 from __future__ import annotations
 
-from core.database import Result
+from core.database import Result, Statement
 
 from .base import Repository
 
@@ -15,7 +15,8 @@ _NO_LATER = (
 
 class DashboardRepository(Repository):
     async def summary(
-        self, *, today: str, yesterday: str, soon: str, month_start: str, prev_month_start: str, prev_same_day: str
+        self, *, today: str, yesterday: str, soon: str, month_start: str, prev_month_start: str, prev_same_day: str,
+        open_after: str,
     ) -> list[Result]:
         return await self.db.batch(
             [
@@ -35,10 +36,13 @@ class DashboardRepository(Repository):
                     [today, soon],
                 ),
                 (
-                    "SELECT COALESCE(SUM(CASE WHEN attendance_date = ?1 THEN 1 ELSE 0 END), 0) AS today, "
-                    "COALESCE(SUM(CASE WHEN attendance_date = ?2 THEN 1 ELSE 0 END), 0) AS yesterday "
+                    # Members present (each counted once a day however many visits), visits, inside now.
+                    "SELECT COUNT(DISTINCT CASE WHEN attendance_date = ?1 THEN member_id END) AS today, "
+                    "COUNT(DISTINCT CASE WHEN attendance_date = ?2 THEN member_id END) AS yesterday, "
+                    "COALESCE(SUM(CASE WHEN attendance_date = ?1 THEN 1 ELSE 0 END), 0) AS today_visits, "
+                    "COUNT(DISTINCT CASE WHEN check_out IS NULL AND check_in > ?3 THEN member_id END) AS in_gym "
                     "FROM attendance WHERE attendance_date >= ?2 AND attendance_date <= ?1",
-                    [today, yesterday],
+                    [today, yesterday, open_after],
                 ),
                 (
                     "SELECT COALESCE(SUM(CASE WHEN payment_date = ?1 THEN amount END), 0) AS today, "
@@ -64,39 +68,56 @@ class DashboardRepository(Repository):
             ]
         )
 
-    async def charts(self, *, first_month: str, today: str, attendance_from: str, month_start: str) -> list[Result]:
+    @staticmethod
+    def _trend_statements(*, month_from: str, month_to: str, starts_to: str, day_from: str, day_to: str) -> list[Statement]:
+        """Revenue, refunds, expenses, new memberships and attendance for [from, to) date ranges:
+        dates on or after month_from (by month) and day_from (by day), before the matching *_to."""
+        return [
+            (
+                "SELECT substr(payment_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS revenue, COUNT(*) AS payments "
+                "FROM payments WHERE status IN ('PAID', 'REFUNDED') AND payment_date >= ?1 AND payment_date < ?2 GROUP BY month",
+                [month_from, month_to],
+            ),
+            (
+                "SELECT substr(refund_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS refunds FROM refunds "
+                "WHERE refund_date >= ?1 AND refund_date < ?2 GROUP BY month",
+                [month_from, month_to],
+            ),
+            (
+                "SELECT substr(expense_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS total FROM expenses "
+                "WHERE expense_date >= ?1 AND expense_date < ?2 GROUP BY month",
+                [month_from, month_to],
+            ),
+            (
+                # Memberships that started in the window necessarily end after it began, so the
+                # (status, end_date) index bounds the scan.
+                "SELECT substr(ms.start_date, 1, 7) AS month, COUNT(*) AS total, "
+                "COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM memberships x WHERE x.member_id = ms.member_id "
+                "AND x.id < ms.id AND x.status != 'CANCELLED') THEN 1 ELSE 0 END), 0) AS renewals "
+                "FROM memberships ms WHERE ms.status IN ('ACTIVE', 'EXPIRING', 'EXPIRED') AND ms.end_date >= ?1 "
+                "AND ms.start_date >= ?1 AND ms.start_date < ?2 GROUP BY month",
+                [month_from, starts_to],
+            ),
+            (
+                "SELECT attendance_date AS date, COUNT(DISTINCT member_id) AS members, COUNT(*) AS visits FROM attendance "
+                "WHERE attendance_date >= ?1 AND attendance_date < ?2 GROUP BY attendance_date",
+                [day_from, day_to],
+            ),
+        ]
+
+    async def chart_history(self, *, first_month: str, month_start: str, attendance_from: str, today: str) -> list[Result]:
+        """Months before this one and days before today."""
+        return await self.db.batch(
+            self._trend_statements(month_from=first_month, month_to=month_start, starts_to=month_start,
+                                   day_from=attendance_from, day_to=today)
+        )
+
+    async def chart_live(self, *, month_start: str, today: str, tomorrow: str) -> list[Result]:
+        """This month and today, plus this month's payment methods and today's plan mix."""
         return await self.db.batch(
             [
-                (
-                    "SELECT substr(payment_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS revenue, COUNT(*) AS payments "
-                    "FROM payments WHERE status IN ('PAID', 'REFUNDED') AND payment_date >= ?1 GROUP BY month",
-                    [first_month],
-                ),
-                (
-                    "SELECT substr(refund_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS refunds FROM refunds "
-                    "WHERE refund_date >= ?1 GROUP BY month",
-                    [first_month],
-                ),
-                (
-                    "SELECT substr(expense_date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS total FROM expenses "
-                    "WHERE expense_date >= ?1 GROUP BY month",
-                    [first_month],
-                ),
-                (
-                    # Memberships that started in the window necessarily end after it began, so the
-                    # (status, end_date) index bounds the scan.
-                    "SELECT substr(ms.start_date, 1, 7) AS month, COUNT(*) AS total, "
-                    "COALESCE(SUM(CASE WHEN EXISTS (SELECT 1 FROM memberships x WHERE x.member_id = ms.member_id "
-                    "AND x.id < ms.id AND x.status != 'CANCELLED') THEN 1 ELSE 0 END), 0) AS renewals "
-                    "FROM memberships ms WHERE ms.status IN ('ACTIVE', 'EXPIRING', 'EXPIRED') AND ms.end_date >= ?1 "
-                    "AND ms.start_date >= ?1 AND ms.start_date <= ?2 GROUP BY month",
-                    [first_month, today],
-                ),
-                (
-                    "SELECT attendance_date AS date, COUNT(*) AS visits FROM attendance WHERE attendance_date >= ?1 "
-                    "GROUP BY attendance_date",
-                    [attendance_from],
-                ),
+                *self._trend_statements(month_from=month_start, month_to="9999-12-31", starts_to=tomorrow,
+                                        day_from=today, day_to=tomorrow),
                 (
                     "SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount FROM payments "
                     "WHERE status IN ('PAID', 'REFUNDED') AND payment_date >= ?1 GROUP BY payment_method ORDER BY amount DESC",
@@ -111,13 +132,26 @@ class DashboardRepository(Repository):
             ]
         )
 
+    async def cached(self, key: str) -> str | None:
+        return await self.db.value("SELECT value FROM dashboard_cache WHERE key = ?1", [key])
+
+    async def cache(self, key: str, value: str, now: str) -> None:
+        await self.db.batch(
+            [
+                ("INSERT OR REPLACE INTO dashboard_cache (key, value, created_at) VALUES (?1, ?2, ?3)", [key, value, now]),
+                ("DELETE FROM dashboard_cache WHERE created_at < datetime(?1, '-2 days')", [now]),
+            ]
+        )
+
     async def activity(self) -> list[Result]:
         return await self.db.batch(
             [
                 ("SELECT id, member_code, name, created_at FROM members ORDER BY id DESC LIMIT 6", []),
                 (
+                    # "+" keeps SQLite on the rowid (newest first, stops after 6) instead of sorting every
+                    # paid payment found through the status index.
                     "SELECT p.id, p.amount, p.payment_method, p.verified_at, m.id AS member_id, m.name FROM payments p "
-                    "JOIN members m ON m.id = p.member_id WHERE p.status IN ('PAID', 'REFUNDED') ORDER BY p.id DESC LIMIT 6",
+                    "JOIN members m ON m.id = p.member_id WHERE +p.status IN ('PAID', 'REFUNDED') ORDER BY p.id DESC LIMIT 6",
                     [],
                 ),
                 (
@@ -130,8 +164,8 @@ class DashboardRepository(Repository):
                     [],
                 ),
                 (
-                    "SELECT a.id, a.check_in, a.method, m.id AS member_id, m.name FROM attendance a JOIN members m ON m.id = a.member_id "
-                    "ORDER BY a.id DESC LIMIT 6",
+                    "SELECT a.id, a.check_in, a.check_out, a.method, m.id AS member_id, m.name FROM attendance a "
+                    "JOIN members m ON m.id = a.member_id ORDER BY a.id DESC LIMIT 6",
                     [],
                 ),
                 ("SELECT id, category, amount, created_at FROM expenses ORDER BY id DESC LIMIT 4", []),

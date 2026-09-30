@@ -1,8 +1,11 @@
 import {
   AlertTriangle,
+  Ban,
   CalendarCheck2,
   CheckCircle2,
   Clock3,
+  ListChecks,
+  LogIn,
   LogOut,
   PauseCircle,
   RefreshCw,
@@ -17,39 +20,34 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CameraScanner } from '@/components/attendance/CameraScanner'
+import { VisitChips, VisitRows, visitRange } from '@/components/attendance/Visits'
 import { StatusBadge } from '@/components/ui/Badge'
 import { Button, IconButton } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { DataList } from '@/components/ui/DataList'
-import { ConfirmDialog } from '@/components/ui/Dialog'
+import { Dialog } from '@/components/ui/Dialog'
 import { EmptyState, ErrorState, Spinner } from '@/components/ui/Feedback'
 import { inputClasses } from '@/components/ui/Field'
 import { Avatar } from '@/components/ui/Menu'
-import { PageHeader, Pagination, Tabs } from '@/components/ui/Navigation'
+import { PageHeader, Pagination, Segmented, Tabs } from '@/components/ui/Navigation'
 import { useActions } from '@/contexts/ActionsContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { invalidate, useApi } from '@/hooks/useApi'
 import { useDocumentTitle } from '@/hooks/useUtilities'
 import { attendanceApi } from '@/services/endpoints'
-import type { AttendanceEntry, ScanResult } from '@/types'
+import type { AttendanceEntry, AttendanceVisit, ScanResult } from '@/types'
 import { cn } from '@/utils/cn'
 import { beep } from '@/utils/feedback'
-import { daysLeftLabel, formatDate, formatTime, todayISO } from '@/utils/format'
+import { daysLeftLabel, durationLabel, formatDate, formatNumber, formatTime, todayISO } from '@/utils/format'
 
-const SUBTITLES: Record<string, string> = {
-  CHECKED_IN: 'Welcome in!',
-  ALREADY_CHECKED_IN: 'No duplicate entry was created.',
-  CHECKED_OUT: 'See you next time!',
-  ALREADY_CHECKED_OUT: 'This visit is already complete.',
-  EXPIRED: 'Please renew membership.',
-}
-
-const RESULT_STYLE: Record<string, { icon: LucideIcon; tone: string; ring: string; title?: string }> = {
+const RESULT_STYLE: Record<string, { icon: LucideIcon; tone: string; ring: string; title: string }> = {
   CHECKED_IN: { icon: CheckCircle2, tone: 'bg-success-600', ring: 'ring-success-600/20', title: 'Attendance Marked' },
   ALREADY_CHECKED_IN: { icon: Clock3, tone: 'bg-warning-500', ring: 'ring-warning-500/20', title: 'Already checked in' },
   CHECKED_OUT: { icon: LogOut, tone: 'bg-info-600', ring: 'ring-info-600/20', title: 'Checked out' },
   ALREADY_CHECKED_OUT: { icon: LogOut, tone: 'bg-neutral-600', ring: 'ring-neutral-600/20', title: 'Already checked out' },
+  NOT_CHECKED_IN: { icon: LogIn, tone: 'bg-neutral-600', ring: 'ring-neutral-600/20', title: 'Not checked in' },
+  LIMIT: { icon: Ban, tone: 'bg-danger-600', ring: 'ring-danger-600/20', title: 'Daily limit reached' },
   EXPIRED: { icon: XCircle, tone: 'bg-danger-600', ring: 'ring-danger-600/20', title: 'Membership Expired' },
   NO_MEMBERSHIP: { icon: XCircle, tone: 'bg-danger-600', ring: 'ring-danger-600/20', title: 'No active membership' },
   NOT_STARTED: { icon: Clock3, tone: 'bg-info-600', ring: 'ring-info-600/20', title: 'Membership not started' },
@@ -60,13 +58,49 @@ const RESULT_STYLE: Record<string, { icon: LucideIcon; tone: string; ring: strin
   MULTIPLE: { icon: AlertTriangle, tone: 'bg-warning-500', ring: 'ring-warning-500/20', title: 'Pick the member' },
 }
 
+function subtitle(result: ScanResult): string {
+  switch (result.result) {
+    case 'CHECKED_IN':
+      return (result.visit_number ?? 1) > 1 ? `Welcome back — visit ${result.visit_number} today.` : 'Welcome in!'
+    case 'CHECKED_OUT':
+      return `See you next time! ${result.minutes !== undefined ? `Time in the gym: ${durationLabel(result.minutes)}.` : ''}`.trim()
+    case 'ALREADY_CHECKED_IN':
+    case 'ALREADY_CHECKED_OUT':
+      return 'Scanned twice — nothing changed.'
+    case 'EXPIRED':
+      return 'Please renew membership.'
+    default:
+      return result.message
+  }
+}
+
 interface RecentScan {
   key: number
   result: ScanResult
   at: number
 }
 
-function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanResult | null; busy: boolean; onAgain: () => void; onPick: (id: number) => void; onRenew?: (memberId: number) => void }) {
+interface DayCounts {
+  members: number
+  visits: number
+  in_gym: number | null
+}
+
+function ResultCard({
+  result,
+  busy,
+  onAgain,
+  onPick,
+  onCheckOut,
+  onRenew,
+}: {
+  result: ScanResult | null
+  busy: boolean
+  onAgain: () => void
+  onPick: (id: number) => void
+  onCheckOut: (id: number) => void
+  onRenew?: (memberId: number) => void
+}) {
   const actions = useActions()
   if (busy && !result) {
     return (
@@ -82,13 +116,14 @@ function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanRe
           <ScanLine className="size-8" aria-hidden />
         </span>
         <p className="mt-4 text-lg font-semibold text-ink">Ready to scan</p>
-        <p className="mt-1 max-w-xs text-sm text-muted">Scan a member QR, use a USB scanner, or type a member ID or phone number.</p>
+        <p className="mt-1 max-w-xs text-sm text-muted">Scan when a member arrives and again when they leave. They can come back as many times as your gym allows.</p>
       </Card>
     )
   }
   const style = RESULT_STYLE[result.result] ?? RESULT_STYLE.NOT_FOUND
   const Icon = style.icon
   const blocked = !result.ok
+  const out = result.result === 'CHECKED_OUT' || result.result === 'ALREADY_CHECKED_OUT'
   return (
     <Card className={cn('overflow-hidden ring-4', style.ring)} aria-live="assertive">
       <div className={cn('flex items-center gap-4 px-5 py-5 text-white', style.tone)}>
@@ -97,10 +132,10 @@ function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanRe
         </span>
         <div className="min-w-0">
           <p className="text-xl font-bold leading-tight">
-            {result.ok && result.result === 'CHECKED_IN' ? '✓ ' : ''}
-            {style.title ?? result.message}
+            {result.result === 'CHECKED_IN' ? '✓ ' : ''}
+            {style.title}
           </p>
-          <p className="mt-0.5 text-sm text-white/90">{SUBTITLES[result.result] ?? result.message}</p>
+          <p className="mt-0.5 text-sm text-white/90">{subtitle(result)}</p>
         </div>
       </div>
       {result.member ? (
@@ -116,12 +151,18 @@ function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanRe
           </div>
           <dl className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-subtle p-3">
-              <dt className="text-[12px] font-medium text-muted">{result.result === 'CHECKED_OUT' ? 'Check-out time' : 'Check-in time'}</dt>
+              <dt className="text-[12px] font-medium text-muted">{out ? 'Check-out time' : 'Check-in time'}</dt>
               <dd className="mt-0.5 text-base font-semibold text-ink">{result.time ? formatTime(result.time) : '—'}</dd>
+              {out && result.check_in && <dd className="text-[12px] text-muted">In at {formatTime(result.check_in)}</dd>}
             </div>
             <div className="rounded-xl bg-subtle p-3">
               <dt className="text-[12px] font-medium text-muted">Membership Status</dt>
               <dd className="mt-1">{result.membership ? <StatusBadge status={result.membership.status} /> : '—'}</dd>
+              {result.visits_today !== undefined && (
+                <dd className="mt-1 text-[12px] text-muted">
+                  {result.visits_today} visit{result.visits_today === 1 ? '' : 's'} today
+                </dd>
+              )}
             </div>
             {result.membership?.expiry_date && (
               <div className="col-span-2 rounded-xl bg-subtle p-3">
@@ -132,6 +173,11 @@ function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanRe
               </div>
             )}
           </dl>
+          {result.result === 'ALREADY_CHECKED_IN' && (
+            <Button variant="secondary" icon={LogOut} fullWidth onClick={() => onCheckOut(result.member!.id)}>
+              Check out now
+            </Button>
+          )}
           {blocked && onRenew && ['EXPIRED', 'NO_MEMBERSHIP'].includes(result.result) && (
             <Button variant="primary" icon={RefreshCw} fullWidth size="lg" onClick={() => onRenew(result.member!.id)}>
               Renew membership now
@@ -166,6 +212,22 @@ function ResultCard({ result, busy, onAgain, onPick, onRenew }: { result: ScanRe
   )
 }
 
+function TodayCounts({ counts }: { counts: DayCounts | null }) {
+  if (!counts) return null
+  return (
+    <p className="text-[12px] text-muted">
+      <span className="font-semibold text-ink-2">{formatNumber(counts.members)}</span> member{counts.members === 1 ? '' : 's'} today ·{' '}
+      {formatNumber(counts.visits)} visit{counts.visits === 1 ? '' : 's'}
+      {counts.in_gym !== null && (
+        <>
+          {' '}
+          · <span className="font-semibold text-success-700 dark:text-success-300">{formatNumber(counts.in_gym)} in the gym</span>
+        </>
+      )}
+    </p>
+  )
+}
+
 function ScanTab() {
   const { user } = useAuth()
   const actions = useActions()
@@ -176,10 +238,11 @@ function ScanTab() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [recent, setRecent] = useState<RecentScan[]>([])
-  const today = useApi(`attendance:log:${todayISO()}:count`, () => attendanceApi.log({ date: todayISO(), limit: 1 }))
-  const [count, setCount] = useState<number | null>(null)
+  // Today's totals load once; each scan then adjusts them locally (no full reload per scan).
+  const today = useApi(`attendance:today:${todayISO()}`, () => attendanceApi.log({ date: todayISO(), limit: 1 }))
+  const [counts, setCounts] = useState<DayCounts | null>(null)
   useEffect(() => {
-    if (today.data) setCount(today.data.total)
+    if (today.data) setCounts({ members: today.data.members, visits: today.data.visits, in_gym: today.data.in_gym })
   }, [today.data])
 
   const handle = useCallback(
@@ -190,9 +253,14 @@ function ScanTab() {
         setResult(scanned)
         setRecent((list) => [{ key: Date.now() + Math.random(), result: scanned, at: Date.now() }, ...list].slice(0, 8))
         beep(scanned.result === 'CHECKED_IN' || scanned.result === 'CHECKED_OUT' ? 'success' : scanned.ok ? 'warning' : 'error')
-        if (scanned.result === 'CHECKED_IN') setCount((c) => (c ?? 0) + 1)
+        if (scanned.result === 'CHECKED_IN') {
+          setCounts((c) => c && { members: c.members + ((scanned.visit_number ?? 1) === 1 ? 1 : 0), visits: c.visits + 1, in_gym: c.in_gym === null ? null : c.in_gym + 1 })
+        } else if (scanned.result === 'CHECKED_OUT') {
+          setCounts((c) => c && { ...c, in_gym: c.in_gym === null ? null : Math.max(0, c.in_gym - 1) })
+        }
         if (scanned.member) invalidate(`member:${scanned.member.id}`)
-        invalidate('dashboard', 'attendance:log')
+        // Visits change the dashboard's counts and feed; its charts refresh on their own 5-minute cycle.
+        invalidate('dashboard:summary', 'dashboard:activity', 'attendance:log')
       } catch (error) {
         toast.fromError(error)
         beep('error')
@@ -234,13 +302,16 @@ function ScanTab() {
               autoFocus
               autoComplete="off"
               placeholder="Scan with a USB scanner, or type member ID / phone"
-              className={cn(inputClasses, 'h-12 flex-1 text-base')}
+              className={cn(inputClasses, 'h-12 min-w-0 flex-1 text-base')}
             />
             <Button type="submit" size="lg" icon={ScanLine} loading={busy} disabled={!code.trim()}>
-              Check in
+              Mark
             </Button>
           </form>
-          <p className="mt-2 text-[12px] text-muted">Repeat scans never create duplicates. {count !== null && <span className="font-semibold text-ink-2">{count} check-ins today.</span>}</p>
+          <p className="mt-2 text-[12px] text-muted">Scan in, scan out — as often as members come. Double scans are ignored.</p>
+          <div className="mt-1">
+            <TodayCounts counts={counts} />
+          </div>
         </Card>
       </div>
       <div className="space-y-4">
@@ -252,6 +323,7 @@ function ScanTab() {
             inputRef.current?.focus()
           }}
           onPick={(memberId) => void handle(() => attendanceApi.mark(memberId))}
+          onCheckOut={(memberId) => void handle(() => attendanceApi.mark(memberId, 'OUT'))}
           onRenew={staff ? (memberId) => actions.collectPayment({ memberId }) : undefined}
         />
         {recent.length > 0 && (
@@ -262,13 +334,13 @@ function ScanTab() {
                 const style = RESULT_STYLE[scan.result.result] ?? RESULT_STYLE.NOT_FOUND
                 return (
                   <li key={scan.key} className="flex items-center gap-3 px-5 py-2.5">
-                    <span className={cn('flex size-7 items-center justify-center rounded-lg text-white', style.tone)}>
+                    <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-lg text-white', style.tone)}>
                       <style.icon className="size-4" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm text-ink-2">
                       <span className="font-semibold text-ink">{scan.result.member?.name ?? style.title}</span> · {style.title}
                     </span>
-                    <span className="text-[12px] text-faint">{new Date(scan.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                    <span className="shrink-0 text-[12px] text-faint">{new Date(scan.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
                   </li>
                 )
               })}
@@ -280,27 +352,115 @@ function ScanTab() {
   )
 }
 
+/** Every visit of one member on one day: remove a mistaken entry, or end a visit now. */
+function VisitsDialog({ entry, canDelete, onClose }: { entry: AttendanceEntry | null; canDelete: boolean; onClose: () => void }) {
+  const toast = useToast()
+  const [confirming, setConfirming] = useState<number | null>(null)
+  const [working, setWorking] = useState(false)
+  useEffect(() => setConfirming(null), [entry])
+  if (!entry) return null
+  const done = () => {
+    invalidate('attendance', 'dashboard:summary', 'dashboard:activity', `member:${entry.member_id}`)
+    onClose()
+  }
+  const remove = async (visit: AttendanceVisit) => {
+    setWorking(true)
+    try {
+      await attendanceApi.remove(visit.id)
+      toast.success('Visit removed', { description: `${entry.member_name} · ${visitRange(visit)}` })
+      done()
+    } catch (error) {
+      toast.fromError(error)
+    } finally {
+      setWorking(false)
+    }
+  }
+  const checkOut = async () => {
+    setWorking(true)
+    try {
+      const result = await attendanceApi.mark(entry.member_id, 'OUT')
+      if (result.ok) toast.success(result.message, { description: entry.member_name })
+      else toast.warning(result.message, { description: entry.member_name })
+      done()
+    } catch (error) {
+      toast.fromError(error)
+    } finally {
+      setWorking(false)
+    }
+  }
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      size="sm"
+      title={entry.member_name}
+      description={`${formatDate(entry.date, { weekday: true })} · ${entry.visit_count} visit${entry.visit_count === 1 ? '' : 's'}${entry.minutes ? ` · ${durationLabel(entry.minutes)} in the gym` : ''}`}
+      footer={
+        <div className="flex w-full flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+          {entry.in_gym && (
+            <Button icon={LogOut} loading={working && confirming === null} onClick={() => void checkOut()}>
+              Check out now
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <VisitRows
+        visits={entry.visits}
+        action={(visit) =>
+          !canDelete ? null : confirming === visit.id ? (
+            <span className="flex shrink-0 items-center gap-1.5">
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(null)} disabled={working}>
+                Keep
+              </Button>
+              <Button size="sm" variant="danger" loading={working} onClick={() => void remove(visit)}>
+                Remove
+              </Button>
+            </span>
+          ) : (
+            <IconButton icon={Trash2} label={`Remove the visit at ${formatTime(visit.check_in)}`} size="icon-sm" onClick={() => setConfirming(visit.id)} className="hover:text-danger-600" />
+          )
+        }
+      />
+    </Dialog>
+  )
+}
+
 function LogTab() {
   const { user } = useAuth()
-  const toast = useToast()
   const [params, setParams] = useSearchParams()
   const day = params.get('date') ?? todayISO()
+  const show = params.get('show') === 'in_gym' && day === todayISO() ? 'in_gym' : 'all'
   const [page, setPage] = useState(1)
-  const log = useApi(`attendance:log:${day}:${page}`, () => attendanceApi.log({ date: day, page, limit: 50 }), { keepPrevious: true })
-  const [removing, setRemoving] = useState<AttendanceEntry | null>(null)
+  const log = useApi(`attendance:log:${day}:${show}:${page}`, () => attendanceApi.log({ date: day, show, page, limit: 50 }), { keepPrevious: true })
+  const [open, setOpen] = useState<AttendanceEntry | null>(null)
   const canDelete = user?.role === 'ADMIN' || (user?.role === 'STAFF' && day === todayISO())
+  const checkout = log.data?.checkout ?? true
+  const setParam = (key: string, value: string | null) => {
+    setPage(1)
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setParams(next, { replace: true })
+  }
+  const data = log.data
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={day}
             max={todayISO()}
             onChange={(event) => {
+              const value = event.target.value || todayISO()
               setPage(1)
               const next = new URLSearchParams(params)
-              next.set('date', event.target.value || todayISO())
+              next.set('date', value)
+              if (value !== todayISO()) next.delete('show')
               setParams(next, { replace: true })
             }}
             aria-label="Date"
@@ -308,81 +468,101 @@ function LogTab() {
           />
           <span className="text-sm text-muted">{formatDate(day, { weekday: true })}</span>
         </div>
-        {log.data && (
+        {data && (
           <p className="text-sm text-muted">
-            <span className="font-semibold text-ink">{log.data.total}</span> check-ins · {log.data.checked_out} checked out
+            <span className="font-semibold text-ink">{formatNumber(data.members)}</span> member{data.members === 1 ? '' : 's'} · {formatNumber(data.visits)} visit{data.visits === 1 ? '' : 's'}
+            {data.in_gym !== null && day === todayISO() && (
+              <>
+                {' '}
+                · <span className="font-semibold text-success-700 dark:text-success-300">{formatNumber(data.in_gym)} in the gym</span>
+              </>
+            )}
           </p>
         )}
       </div>
-      {log.error && !log.data ? (
+      {checkout && day === todayISO() && (
+        <div className="border-b border-line px-4 py-2.5">
+          <Segmented
+            label="Show"
+            value={show}
+            onChange={(value) => setParam('show', value === 'in_gym' ? 'in_gym' : null)}
+            options={[
+              { value: 'all', label: 'Everyone today' },
+              { value: 'in_gym', label: 'In the gym now', count: data?.in_gym ?? undefined },
+            ]}
+          />
+        </div>
+      )}
+      {log.error && !data ? (
         <ErrorState error={log.error} onRetry={log.reload} />
       ) : (
         <DataList
-          rows={log.data?.items}
+          rows={data?.items}
           loading={log.loading}
-          rowKey={(a) => a.id}
+          rowKey={(a) => a.member_id}
+          onRowClick={(a) => setOpen(a)}
           columns={[
             {
               key: 'member',
               header: 'Member',
               cell: (a) => (
-                <Link to={`/members/${a.member_id}`} className="flex items-center gap-3">
+                <Link to={`/members/${a.member_id}`} onClick={(event) => event.stopPropagation()} className="flex items-center gap-3">
                   <Avatar name={a.member_name} size="sm" />
-                  <span>
-                    <span className="block font-semibold text-ink hover:underline">{a.member_name}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-ink hover:underline">{a.member_name}</span>
                     <span className="block text-[12px] text-muted">{a.member_code}</span>
                   </span>
                 </Link>
               ),
             },
-            { key: 'phone', header: 'Phone', cell: (a) => <span className="tabular">{a.phone}</span> },
-            { key: 'in', header: 'Check-in', cell: (a) => <span className="tabular font-medium text-ink">{formatTime(a.check_in)}</span> },
-            { key: 'out', header: 'Check-out', cell: (a) => (a.check_out ? <span className="tabular">{formatTime(a.check_out)}</span> : <span className="text-faint">—</span>) },
+            { key: 'visits', header: 'Visits', cell: (a) => <VisitChips visits={a.visits} /> },
+            ...(checkout
+              ? [
+                  {
+                    key: 'time',
+                    header: 'Time in gym',
+                    cell: (a: AttendanceEntry) => (a.minutes ? <span className="tabular whitespace-nowrap">{durationLabel(a.minutes)}</span> : <span className="text-faint">—</span>),
+                  },
+                ]
+              : []),
             {
               key: 'actions',
               header: <span className="sr-only">Actions</span>,
-              align: 'right',
-              cell: (a) => (canDelete ? <IconButton icon={Trash2} label={`Remove ${a.member_name}'s check-in`} size="icon-sm" onClick={() => setRemoving(a)} className="hover:text-danger-600" /> : null),
+              align: 'right' as const,
+              cell: (a) => <IconButton icon={ListChecks} label={`${a.member_name}'s visits`} size="icon-sm" onClick={(event) => { event.stopPropagation(); setOpen(a) }} />,
             },
           ]}
           mobile={(a) => (
-            <div className="flex items-center gap-3">
-              <Avatar name={a.member_name} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-ink">{a.member_name}</p>
-                <p className="text-[12px] text-muted">{a.member_code}</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <Avatar name={a.member_name} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-ink">{a.member_name}</p>
+                  <p className="text-[12px] text-muted">
+                    {a.member_code} · {a.visit_count} visit{a.visit_count === 1 ? '' : 's'}
+                    {checkout && a.minutes ? ` · ${durationLabel(a.minutes)}` : ''}
+                  </p>
+                </div>
+                {a.in_gym && <span className="shrink-0 rounded-full bg-success-50 px-2 py-0.5 text-[11px] font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-300">In gym</span>}
               </div>
-              <span className="tabular text-sm text-ink-2">
-                {formatTime(a.check_in)}
-                {a.check_out && ` → ${formatTime(a.check_out)}`}
-              </span>
+              <VisitChips visits={a.visits} />
             </div>
           )}
-          empty={<EmptyState icon={CalendarCheck2} title="No check-ins on this day" description="Scanned QR codes show up here instantly." />}
+          empty={
+            show === 'in_gym' ? (
+              <EmptyState icon={CalendarCheck2} title="Nobody is in the gym right now" description="Members appear here from check-in until they check out." />
+            ) : (
+              <EmptyState icon={CalendarCheck2} title="No visits on this day" description="Scanned QR codes show up here instantly." />
+            )
+          }
         />
       )}
-      {log.data && log.data.pages > 1 && (
+      {data && data.pages > 1 && (
         <div className="border-t border-line px-4">
-          <Pagination page={page} pages={log.data.pages} total={log.data.total} limit={log.data.limit} onPage={setPage} />
+          <Pagination page={page} pages={data.pages} total={data.total} limit={data.limit} onPage={setPage} />
         </div>
       )}
-      <ConfirmDialog
-        open={!!removing}
-        onClose={() => setRemoving(null)}
-        title="Remove this check-in?"
-        message={removing ? `${removing.member_name}'s check-in at ${formatTime(removing.check_in)} will be deleted.` : ''}
-        confirmLabel="Remove"
-        onConfirm={async () => {
-          try {
-            await attendanceApi.remove(removing!.id)
-            invalidate('attendance', 'dashboard', `member:${removing!.member_id}`)
-            toast.success('Check-in removed')
-          } catch (error) {
-            toast.fromError(error)
-            throw error
-          }
-        }}
-      />
+      <VisitsDialog entry={open} canDelete={canDelete} onClose={() => setOpen(null)} />
     </Card>
   )
 }
@@ -393,7 +573,7 @@ export default function AttendancePage() {
   const tab = params.get('tab') === 'log' ? 'log' : 'scan'
   return (
     <div>
-      <PageHeader title="Attendance" description="Scan member QR codes at the door — one tap, no duplicates" />
+      <PageHeader title="Attendance" description="Scan in, scan out — members can visit more than once a day" />
       <Tabs
         className="mb-4"
         value={tab}

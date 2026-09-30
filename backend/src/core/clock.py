@@ -22,6 +22,11 @@ def parse_ts(value: str) -> datetime:
     return datetime.strptime(value[:19].replace("T", " "), TS_FORMAT).replace(tzinfo=timezone.utc)
 
 
+def minutes_between(start: str, end: str | None) -> int:
+    """Whole minutes from one stored timestamp to another (0 when ``end`` is missing)."""
+    return max(0, int((parse_ts(end) - parse_ts(start)).total_seconds() // 60)) if end else 0
+
+
 def iso_z(value: str | None) -> str | None:
     """'2026-09-23 10:15:00' -> '2026-09-23T10:15:00Z' for the API."""
     if not value:

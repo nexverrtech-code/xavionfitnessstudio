@@ -8,7 +8,7 @@ import { useApi } from '@/hooks/useApi'
 import { useDocumentTitle } from '@/hooks/useUtilities'
 import { portalApi } from '@/services/endpoints'
 import { cn } from '@/utils/cn'
-import { firstName, formatDate, formatMoney, METHOD_LABELS, relativeTime } from '@/utils/format'
+import { firstName, formatDate, formatMoney, formatTime, METHOD_LABELS, relativeTime } from '@/utils/format'
 
 const NEUTRAL = 'bg-surface text-ink ring-1 ring-line'
 const ACTIONS: { to: string; label: string; icon: LucideIcon; tone: string }[] = [
@@ -49,7 +49,13 @@ export default function PortalHomePage() {
         <h1 className="text-[26px] font-bold tracking-tight text-ink">
           Hello, {o ? firstName(o.member.name) : '…'}
         </h1>
-        <p className="text-sm text-muted">{o?.attendance.checked_in_today ? 'Great work — you checked in today.' : "Let's make today count."}</p>
+        <p className="text-sm text-muted">
+          {o?.attendance.inside_since
+            ? `You're in the gym — checked in at ${formatTime(o.attendance.inside_since)}.`
+            : o?.attendance.checked_in_today
+              ? `Great work — ${o.attendance.visits_today > 1 ? `${o.attendance.visits_today} visits` : 'you checked in'} today.`
+              : "Let's make today count."}
+        </p>
       </div>
 
       {o ? <MembershipHero membership={o.membership} pending={o.pending_payment} /> : <Skeleton className="h-64 rounded-3xl" />}
@@ -69,7 +75,7 @@ export default function PortalHomePage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Tile to="/portal/attendance" title="This month" icon={CalendarCheck2}>
             <p className="text-2xl font-bold text-ink">
-              {o.attendance.this_month} <span className="text-sm font-medium text-muted">visit{o.attendance.this_month === 1 ? '' : 's'}</span>
+              {o.attendance.this_month} <span className="text-sm font-medium text-muted">day{o.attendance.this_month === 1 ? '' : 's'} present</span>
             </p>
             <div className="mt-3 flex gap-1" aria-label="Last 14 days">
               {o.attendance.last_14_days.map((d) => (

@@ -8,7 +8,8 @@ from .base import Repository
 
 
 class PortalRepository(Repository):
-    async def overview(self, *, member_id: int, user_id: int, today: str, month_start: str, strip_start: str) -> list[Result]:
+    async def overview(self, *, member_id: int, user_id: int, today: str, month_start: str, strip_start: str,
+                       open_after: str) -> list[Result]:
         return await self.db.batch(
             [
                 (
@@ -23,13 +24,15 @@ class PortalRepository(Repository):
                     [member_id],
                 ),
                 (
-                    "SELECT COALESCE(SUM(CASE WHEN attendance_date >= ?2 THEN 1 ELSE 0 END), 0) AS this_month, "
-                    "MAX(check_in) AS last_check_in, MAX(CASE WHEN attendance_date = ?3 THEN check_in END) AS today_check_in "
+                    # Days present this month; today's visits; whether a visit is still going.
+                    "SELECT COUNT(DISTINCT CASE WHEN attendance_date >= ?2 THEN attendance_date END) AS this_month, "
+                    "MAX(check_in) AS last_check_in, COALESCE(SUM(CASE WHEN attendance_date = ?3 THEN 1 ELSE 0 END), 0) AS today_visits, "
+                    "MAX(CASE WHEN check_out IS NULL AND check_in > ?4 THEN check_in END) AS inside_since "
                     "FROM attendance WHERE member_id = ?1",
-                    [member_id, month_start, today],
+                    [member_id, month_start, today, open_after],
                 ),
                 (
-                    "SELECT attendance_date FROM attendance WHERE member_id = ?1 AND attendance_date >= ?2",
+                    "SELECT DISTINCT attendance_date FROM attendance WHERE member_id = ?1 AND attendance_date >= ?2",
                     [member_id, strip_start],
                 ),
                 (

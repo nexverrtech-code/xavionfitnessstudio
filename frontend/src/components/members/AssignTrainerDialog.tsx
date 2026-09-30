@@ -13,7 +13,7 @@ import { cn } from '@/utils/cn'
 export function AssignTrainerDialog({ open, onClose, memberId, currentTrainerId }: { open: boolean; onClose: () => void; memberId: number | null; currentTrainerId?: number | null }) {
   const toast = useToast()
   const [selected, setSelected] = useState<number | null>(currentTrainerId ?? null)
-  const trainers = useApi(open ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'))
+  const trainers = useApi(open ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'), { freshMs: 600_000 })
   useEffect(() => {
     if (open) setSelected(currentTrainerId ?? null)
   }, [open, currentTrainerId])

@@ -22,7 +22,8 @@ LIST_COLUMNS = (
 )
 DETAIL_COLUMNS = (
     "m.id, m.member_code, m.user_id, m.name, m.phone, m.email, m.gender, m.date_of_birth, m.address, "
-    "m.emergency_contact, m.joining_date, m.trainer_id, m.status, m.qr_token, m.created_by, m.created_at, m.updated_at"
+    "m.emergency_contact, m.joining_date, m.trainer_id, m.status, m.qr_token, m.created_by, m.created_at, m.updated_at, "
+    "m.messages_opt_out"
 )
 # Members whose paid coverage ends within the window and who have not renewed yet.
 EXPIRING_IDS = (
@@ -45,7 +46,7 @@ class MemberRepository(Repository):
 
     async def basic(self, member_id: int) -> dict[str, Any] | None:
         return await self.db.one(
-            "SELECT m.id, m.member_code, m.name, m.phone, m.email, m.status, m.user_id, m.trainer_id, "
+            "SELECT m.id, m.member_code, m.name, m.phone, m.email, m.status, m.user_id, m.trainer_id, m.messages_opt_out, "
             f"{COVERAGE_END} AS expiry_date FROM members m WHERE m.id = ?1",
             [member_id],
         )
@@ -68,32 +69,35 @@ class MemberRepository(Repository):
         """Member ID = prefix + zero-padded next number (GYM000001), computed inside the insert."""
         return (
             "INSERT INTO members (id, member_code, name, phone, email, gender, date_of_birth, address, emergency_contact, "
-            "joining_date, trainer_id, status, qr_token, created_by, created_at, updated_at) "
-            "SELECT n, ?1 || printf('%06d', n), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'INACTIVE', ?11, ?12, ?13, ?13 "
+            "joining_date, trainer_id, status, qr_token, created_by, created_at, updated_at, messages_opt_out) "
+            "SELECT n, ?1 || printf('%06d', n), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'INACTIVE', ?11, ?12, ?13, ?13, ?14 "
             "FROM (SELECT COALESCE(MAX(id), 0) + 1 AS n FROM members) RETURNING id, member_code, name",
             [
                 prefix, values["name"], values["phone"], values.get("email"), values.get("gender"),
                 values.get("date_of_birth"), values.get("address"), values.get("emergency_contact"),
                 values["joining_date"], values.get("trainer_id"), qr_token, created_by, now,
+                0 if values.get("messages", True) else 1,
             ],
         )
 
     async def update(self, member_id: int, values: dict[str, Any], now: str) -> int:
         result = await self.db.run(
             "UPDATE members SET name = ?2, phone = ?3, email = ?4, gender = ?5, date_of_birth = ?6, address = ?7, "
-            "emergency_contact = ?8, joining_date = ?9, updated_at = ?10 WHERE id = ?1",
+            "emergency_contact = ?8, joining_date = ?9, updated_at = ?10, messages_opt_out = ?11 WHERE id = ?1",
             [
                 member_id, values["name"], values["phone"], values.get("email"), values.get("gender"),
                 values.get("date_of_birth"), values.get("address"), values.get("emergency_contact"),
-                values["joining_date"], now,
+                values["joining_date"], now, 0 if values.get("messages", True) else 1,
             ],
         )
         return result.changes
 
-    async def update_contact(self, member_id: int, *, email: str | None, address: str | None, emergency: str | None, now: str) -> None:
+    async def update_contact(self, member_id: int, *, email: str | None, address: str | None, emergency: str | None, now: str,
+                             messages: bool | None = None) -> None:
         await self.db.run(
-            "UPDATE members SET email = ?2, address = ?3, emergency_contact = ?4, updated_at = ?5 WHERE id = ?1",
-            [member_id, email, address, emergency, now],
+            "UPDATE members SET email = ?2, address = ?3, emergency_contact = ?4, updated_at = ?5, "
+            "messages_opt_out = COALESCE(?6, messages_opt_out) WHERE id = ?1",
+            [member_id, email, address, emergency, now, None if messages is None else 0 if messages else 1],
         )
 
     async def set_status(self, member_id: int, status: str, now: str) -> int:
@@ -240,7 +244,9 @@ class MemberRepository(Repository):
                 [member_id],
             ),
             (
-                "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN attendance_date >= ?2 THEN 1 ELSE 0 END), 0) AS this_month, "
+                # Days present (a day with several visits counts once) and the latest check-in.
+                "SELECT COUNT(DISTINCT attendance_date) AS total, "
+                "COUNT(DISTINCT CASE WHEN attendance_date >= ?2 THEN attendance_date END) AS this_month, "
                 "MAX(check_in) AS last_check_in FROM attendance WHERE member_id = ?1",
                 [member_id, month_start],
             ),
@@ -279,7 +285,8 @@ class MemberRepository(Repository):
     async def activity(self, member_id: int, *, include_finance: bool) -> list[Result]:
         statements: list[Statement] = [
             (
-                "SELECT id, check_in, method FROM attendance WHERE member_id = ?1 ORDER BY attendance_date DESC LIMIT 8",
+                "SELECT id, check_in, check_out, method FROM attendance WHERE member_id = ?1 "
+                "ORDER BY attendance_date DESC, check_in DESC LIMIT 8",
                 [member_id],
             ),
             (
@@ -312,7 +319,8 @@ class MemberRepository(Repository):
     async def profile(self, member_id: int) -> dict[str, Any] | None:
         return await self.db.one(
             "SELECT m.id, m.member_code, m.name, m.phone, m.email, m.gender, m.date_of_birth, m.address, m.emergency_contact, "
-            "m.joining_date, m.status, t.name AS trainer_name FROM members m LEFT JOIN trainers t ON t.id = m.trainer_id "
+            "m.joining_date, m.status, t.name AS trainer_name, m.messages_opt_out = 0 AS messages FROM members m "
+            "LEFT JOIN trainers t ON t.id = m.trainer_id "
             "WHERE m.id = ?1",
             [member_id],
         )

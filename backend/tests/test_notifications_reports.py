@@ -5,6 +5,8 @@ from conftest import create_member, pay
 
 from core.clock import Clock
 from jobs.scheduler import run_daily_jobs
+from repositories.dashboard import DashboardRepository
+from services import dashboard_service
 
 
 def _inbox(client, headers):
@@ -86,3 +88,29 @@ def test_dashboard_net_revenue_subtracts_refunds_and_expenses(client, admin, pla
     charts = client.get("/api/dashboard/charts", headers=admin).json()
     assert charts["revenue_trend"][-1]["revenue"] == 300000
     assert {"revenue_trend", "membership_trend", "attendance_trend", "payment_methods", "plan_distribution"} <= set(charts)
+
+
+def test_dashboard_charts_compute_past_periods_once_a_day_and_today_live(client, admin, plans, db, monkeypatch):
+    member = create_member(client, admin)["member"]
+    pay(client, admin, member["id"], plans["Monthly"], start_date="2026-08-01", payment_date="2026-08-01")
+    db.conn.execute("INSERT INTO attendance (member_id, attendance_date, check_in, method) "
+                    "VALUES (?, '2026-09-20', '2026-09-20 01:00:00', 'QR')", [member["id"]])
+    charts = client.get("/api/dashboard/charts", headers=admin).json()
+    assert {r["month"]: r["revenue"] for r in charts["revenue_trend"]}["2026-08"] == 150000
+    assert {r["date"]: r["members"] for r in charts["attendance_trend"]}["2026-09-20"] == 1
+    assert db.conn.execute("SELECT COUNT(*) FROM dashboard_cache").fetchone()[0] == 1
+
+    # Past periods are not recomputed: another isolate reads the day's row from D1.
+    async def recompute(*args, **kwargs):
+        raise AssertionError("past chart periods recomputed")
+
+    monkeypatch.setattr(DashboardRepository, "chart_history", recompute)
+    dashboard_service._history.clear()
+    # Today and this month stay live.
+    assert pay(client, admin, member["id"], plans["Quarterly"]).status_code == 201
+    client.post("/api/attendance/scan", json={"code": member["member_code"]}, headers=admin)
+    again = client.get("/api/dashboard/charts", headers=admin).json()
+    revenue = {r["month"]: r["revenue"] for r in again["revenue_trend"]}
+    assert revenue["2026-08"] == 150000 and revenue["2026-09"] == 400000
+    assert again["attendance_trend"][-1] == {"date": "2026-09-23", "members": 1, "visits": 1}
+    assert again["plan_distribution"] == [{"plan": "Quarterly", "members": 1}]

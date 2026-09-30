@@ -73,18 +73,24 @@ class ReportService:
             }
             fetch = self.repo.payment_rows
         elif kind == "attendance":
-            daily = (await self.repo.attendance_daily(low, high)).rows
+            # "members" = members present that day (a member with three visits counts once);
+            # "visits" = every check-in. Week / month totals add up the days.
+            daily_r, unique_r = await self.repo.attendance_daily(low, high)
+            daily = daily_r.rows
             weekly: dict[str, dict[str, int]] = {}
             monthly: dict[str, dict[str, int]] = {}
             for r in daily:
                 d = date.fromisoformat(r["date"])
-                week = weekly.setdefault(_week_start(d).isoformat(), {"visits": 0, "days": 0})
-                month = monthly.setdefault(r["date"][:7], {"visits": 0, "days": 0})
+                week = weekly.setdefault(_week_start(d).isoformat(), {"members": 0, "visits": 0, "days": 0})
+                month = monthly.setdefault(r["date"][:7], {"members": 0, "visits": 0, "days": 0})
                 for bucket in (week, month):
+                    bucket["members"] += r["members"]
                     bucket["visits"] += r["visits"]
                     bucket["days"] += 1
             summary = {
                 "total_visits": sum(r["visits"] for r in daily),
+                "member_days": sum(r["members"] for r in daily),
+                "unique_members": (unique_r.first or {}).get("c", 0),
                 "daily": daily,
                 "weekly": [{"week_start": k, **v} for k, v in sorted(weekly.items())],
                 "monthly": [{"month": k, **v} for k, v in sorted(monthly.items())],

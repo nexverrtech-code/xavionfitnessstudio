@@ -265,6 +265,8 @@ export type ScanResultCode =
   | 'INVALID'
   | 'NOT_FOUND'
   | 'MULTIPLE'
+  | 'LIMIT'
+  | 'NOT_CHECKED_IN'
 
 export interface ScanResult {
   result: ScanResultCode
@@ -275,31 +277,71 @@ export interface ScanResult {
   time?: string
   check_in?: string
   attendance_id?: number
+  /** Which visit of the day this check-in started (1 = first). */
+  visit_number?: number
+  visits_today?: number
+  /** Length of the visit that a check-out ended. */
+  minutes?: number
   matches?: { id: number; member_code: string; name: string }[]
 }
 
-export interface AttendanceEntry {
+/** One visit: a check-in and (once the member leaves) a check-out. */
+export interface AttendanceVisit {
   id: number
+  check_in: string
+  check_out: string | null
+  method: AttendanceMethod
+  /** Still in the gym (checked in, not yet checked out). */
+  open: boolean
+  minutes: number
+}
+
+/** A member's day in the attendance log: every visit, plus the day at a glance. */
+export interface AttendanceEntry {
   member_id: number
   member_name: string
   member_code: string
   phone: string
   date: string
+  visits: AttendanceVisit[]
+  visit_count: number
+  in_gym: boolean
+  minutes: number
+  id: number
   check_in: string
   check_out: string | null
   method: AttendanceMethod
 }
 
 export interface AttendanceLog extends Paginated<AttendanceEntry> {
-  checked_out: number
   date: string
+  /** false when the gym records arrivals only (no check-out). */
+  checkout: boolean
+  /** Members present (each once, however many visits). */
+  members: number
+  visits: number
+  in_gym: number | null
+  checked_out: number
+}
+
+export interface AttendanceDay {
+  date: string
+  visits: AttendanceVisit[]
+  minutes: number
+  id: number
+  check_in: string
+  check_out: string | null
+  method: AttendanceMethod
 }
 
 export interface AttendanceHistory {
   from: string
   to: string
+  /** Days present. */
   count: number
-  items: { id: number; date: string; check_in: string; check_out: string | null; method: AttendanceMethod }[]
+  days: number
+  visits: number
+  items: AttendanceDay[]
 }
 
 export interface Exercise {
@@ -408,7 +450,8 @@ export interface DashboardSummary {
     expiring: number
     joined_this_month: number
   }
-  attendance: { today: number; yesterday: number }
+  /** today / yesterday: members present (once a day each). */
+  attendance: { today: number; yesterday: number; visits_today: number; in_gym: number | null }
   revenue: { today: number; month: number; month_payments: number; month_refunds: number; previous_month_same_period: number }
   pending_payments: { count: number; amount: number }
   expenses: { month: number }
@@ -419,7 +462,7 @@ export interface DashboardSummary {
 export interface DashboardCharts {
   revenue_trend: { month: string; revenue: number; expenses?: number; payments: number }[]
   membership_trend: { month: string; new: number; renewals: number }[]
-  attendance_trend: { date: string; visits: number }[]
+  attendance_trend: { date: string; members: number; visits: number }[]
   payment_methods: { method: PaymentMethod; count: number; amount: number }[]
   plan_distribution: { plan: string; members: number }[]
 }
@@ -463,6 +506,8 @@ export interface GymSettings {
   attendance_checkout: boolean
   attendance_grace_days: number
   attendance_cooldown_minutes: number
+  attendance_max_visit_hours: number
+  attendance_max_visits_per_day: number
   notification_retention_days: number
   archive_after_months: number
   storage_alerts_enabled: boolean
@@ -473,9 +518,13 @@ export interface PortalOverview {
   membership: CoverageInfo & { current: Membership | null; upcoming: Membership | null; latest: Membership | null }
   pending_payment: PendingPayment | null
   attendance: {
+    /** Days present this month. */
     this_month: number
     last_check_in: string | null
     checked_in_today: boolean
+    visits_today: number
+    /** Set while the member is in the gym (checked in, not yet out). */
+    inside_since: string | null
     last_14_days: { date: string; visited: boolean }[]
   }
   latest_payment: {

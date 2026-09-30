@@ -22,9 +22,10 @@
     }
   ],
 
-  // Once a day at 00:30 UTC = 06:00 IST: membership statuses, in-app expiry reminders,
-  // clean-up of non-critical data and the storage snapshot.
-  "triggers": { "crons": ["30 0 * * *"] },
+  // Once a day at 00:30 UTC = 06:00 IST: membership statuses, expiry reminders (in-app, and
+  // WhatsApp / email when switched on), clean-up of non-critical data and the storage snapshot.
+  // Every minute: send queued WhatsApp / email messages (does nothing until a channel is set up).
+  "triggers": { "crons": ["30 0 * * *", "* * * * *"] },
 
   // Per-IP sign-in throttle (Workers Rate Limiting binding). Account lockout after
   // 5 failed passwords is enforced in D1 regardless; remove this block if your plan
@@ -33,8 +34,8 @@
     { "name": "LOGIN_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } }
   ],
 
-  // Public, non-secret configuration. Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN
-  // and CF_API_TOKEN) are set with `npx wrangler secret put NAME` — never here.
+  // Public, non-secret configuration. Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN,
+  // CF_API_TOKEN, WHATSAPP_TOKEN and RESEND_API_KEY) are set with `npx wrangler secret put NAME` — never here.
   "vars": {
     "ENVIRONMENT": "production",
     "ALLOWED_ORIGINS": "https://xavion.nexverrtech.com,https://www.xavion.nexverrtech.com",
@@ -47,6 +48,9 @@
     "D1_DATABASE_NAME": "smartgym-db",
     // PBKDF2 rounds sized for the Free plan's 10 ms CPU budget (raise on Workers Paid).
     "PASSWORD_ITERATIONS": "20000"
+    // Automatic messages (see README -> Automatic WhatsApp and email). Uncomment and fill in:
+    // "WHATSAPP_PHONE_NUMBER_ID": "your WhatsApp Cloud API phone number id",
+    // "EMAIL_FROM": "receipts@yourdomain.com"
   },
 
   "observability": { "enabled": true }

@@ -73,8 +73,9 @@ class TrainerRepository(Repository):
                     [trainer_id, today],
                 ),
                 (
-                    "SELECT COUNT(*) AS c FROM attendance a JOIN members m ON m.id = a.member_id "
-                    "WHERE a.attendance_date >= ?2 AND m.trainer_id = ?1",
+                    # Member-days this week: several visits by one member on one day count once.
+                    "SELECT COUNT(*) AS c FROM (SELECT DISTINCT a.member_id, a.attendance_date FROM attendance a "
+                    "JOIN members m ON m.id = a.member_id WHERE a.attendance_date >= ?2 AND m.trainer_id = ?1)",
                     [trainer_id, week_start],
                 ),
                 ("SELECT COUNT(*) AS c FROM workout_plans WHERE trainer_id = ?1 AND status = 'ACTIVE'", [trainer_id]),

@@ -28,7 +28,7 @@ const REPORTS: ReportDef[] = [
   { kind: 'members', title: 'Member report', description: 'Members who joined in the period, with status, trainer and membership end date.', icon: Users, basis: 'By joining date' },
   { kind: 'memberships', title: 'Membership report', description: 'Memberships that started in the period, per plan, with renewals and value.', icon: ClipboardList, basis: 'By start date' },
   { kind: 'payments', title: 'Payment report', description: 'Every payment with its number, method, UTR, status, refund and who verified it.', icon: Wallet, basis: 'By payment date' },
-  { kind: 'attendance', title: 'Attendance report', description: 'Each check-in, with daily, weekly and monthly totals.', icon: CalendarCheck2, basis: 'By visit date' },
+  { kind: 'attendance', title: 'Attendance report', description: 'Every visit (check-in, check-out, minutes), with members present per day, week and month.', icon: CalendarCheck2, basis: 'By visit date' },
   { kind: 'expenses', title: 'Expense report', description: 'Expenses by category with totals.', icon: Receipt, adminOnly: true, basis: 'By expense date' },
 ]
 

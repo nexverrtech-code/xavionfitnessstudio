@@ -96,6 +96,22 @@ class AuthService:
             return []
         return await self.users.find_for_login(email=email, phone=phone, member_code=member_code)
 
+    async def _check_password(self, row: dict[str, Any], password: str) -> bool:
+        """Verify a known account's password. Every wrong guess — at sign-in or when changing the
+        password — counts toward the lockout, so a stolen session cannot guess without limit."""
+        now_dt = self.ctx.clock.utcnow()
+        if row["locked_until"] and parse_ts(row["locked_until"]) > now_dt:
+            minutes = max(1, int((parse_ts(row["locked_until"]) - now_dt).total_seconds() // 60) + 1)
+            raise TooManyRequests(f"Too many failed attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}.")
+        if await verify_password(password, row["password_hash"], **self._secret()):
+            return True
+        failed = row["failed_logins"] + 1
+        locked_until = fmt_ts(now_dt + timedelta(minutes=LOCK_MINUTES)) if failed >= MAX_FAILED_LOGINS else None
+        await self.users.record_failure(row["id"], 0 if locked_until else failed, locked_until)
+        if locked_until:
+            raise TooManyRequests(f"Too many failed attempts. Try again in {LOCK_MINUTES} minutes.")
+        return False
+
     # -- sign in -------------------------------------------------------------------------------
     async def login(self, identifier: str, password: str, remember: bool, client_ip: str) -> dict[str, Any]:
         await check_login_rate(self.ctx.env, f"login:{client_ip}")
@@ -108,17 +124,7 @@ class AuthService:
             await verify_password(password, None, **self._secret())  # equal timing for unknown accounts
             raise Unauthorized("Incorrect login or password.", code="INVALID_CREDENTIALS")
 
-        now_dt = self.ctx.clock.utcnow()
-        if row["locked_until"] and parse_ts(row["locked_until"]) > now_dt:
-            minutes = max(1, int((parse_ts(row["locked_until"]) - now_dt).total_seconds() // 60) + 1)
-            raise TooManyRequests(f"Too many failed attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}.")
-
-        if not await verify_password(password, row["password_hash"], **self._secret()):
-            failed = row["failed_logins"] + 1
-            locked_until = fmt_ts(now_dt + timedelta(minutes=LOCK_MINUTES)) if failed >= MAX_FAILED_LOGINS else None
-            await self.users.record_failure(row["id"], 0 if locked_until else failed, locked_until)
-            if locked_until:
-                raise TooManyRequests(f"Too many failed attempts. Try again in {LOCK_MINUTES} minutes.")
+        if not await self._check_password(row, password):
             raise Unauthorized("Incorrect login or password.", code="INVALID_CREDENTIALS")
 
         if row["status"] != "ACTIVE":
@@ -139,7 +145,7 @@ class AuthService:
 
     async def change_password(self, user: CurrentUser, current: str, new: str) -> dict[str, Any]:
         row = await self.users.get(user.id)
-        if not row or not await verify_password(current, row["password_hash"], **self._secret()):
+        if not row or not await self._check_password(row, current):
             raise ValidationFailed("Your current password is incorrect.", fields={"current_password": "Incorrect password"})
         problem = password_problem(new)
         if problem:

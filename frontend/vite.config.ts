@@ -61,6 +61,7 @@ function smartgymPwa(apiUrl: string): Plugin {
         "font-src 'self'",
         `connect-src 'self' ${apiOrigin}`.trim(),
         "frame-src 'none'",
+        "object-src 'none'",
         "worker-src 'self'",
         "manifest-src 'self'",
         "base-uri 'self'",
@@ -73,6 +74,9 @@ function smartgymPwa(apiUrl: string): Plugin {
         source: [
           '/*',
           `  Content-Security-Policy: ${csp}`,
+          // HTTPS only from the first visit on (the browser upgrades any http:// link itself).
+          '  Strict-Transport-Security: max-age=63072000; includeSubDomains',
+          '  Cross-Origin-Opener-Policy: same-origin',
           '  X-Content-Type-Options: nosniff',
           '  X-Frame-Options: DENY',
           '  Referrer-Policy: strict-origin-when-cross-origin',

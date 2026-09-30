@@ -19,7 +19,7 @@ from core.clock import Clock  # noqa: E402
 from core.config import load_config  # noqa: E402
 from core.database.sqlite import SQLiteDatabase  # noqa: E402
 from security.passwords import hash_password_sync  # noqa: E402
-from services import settings_service  # noqa: E402
+from services import dashboard_service, settings_service  # noqa: E402
 from services.auth_service import session_cache  # noqa: E402
 
 ADMIN_EMAIL = "admin@smartgym.test"
@@ -42,6 +42,7 @@ def db():
     database = SQLiteDatabase(":memory:")
     database.apply_migrations(ROOT / "migrations")
     settings_service.invalidate_cache()
+    dashboard_service._history.clear()
     session_cache.clear()
     yield database
     database.conn.close()

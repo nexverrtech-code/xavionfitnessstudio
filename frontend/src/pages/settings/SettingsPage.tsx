@@ -232,22 +232,55 @@ function NotificationsTab({ settings }: { settings: GymSettings }) {
 }
 
 function AttendanceTab({ settings }: { settings: GymSettings }) {
-  const { draft, set, changed, dirty, reset } = useDraft(settings, ['attendance_checkout', 'attendance_cooldown_minutes', 'attendance_grace_days'])
+  const { draft, set, changed, dirty, reset } = useDraft(settings, [
+    'attendance_checkout',
+    'attendance_cooldown_minutes',
+    'attendance_grace_days',
+    'attendance_max_visit_hours',
+    'attendance_max_visits_per_day',
+  ])
   const { save, saving, errors } = useSave()
   return (
     <Card>
       <CardHeader icon={CalendarCheck2} title="Attendance" description="How QR scans behave at the front desk" />
       <div className="divide-y divide-line px-5 pb-5">
-        <Switch label="Record check-out on a second scan" description="A later scan the same day records the check-out time." checked={!!draft.attendance_checkout} onChange={(v) => set('attendance_checkout', v)} />
+        <Switch
+          label="Check in and check out"
+          description="Scans alternate: arriving checks in, leaving checks out, and coming back later starts a new visit. Off: each scan records an arrival only."
+          checked={!!draft.attendance_checkout}
+          onChange={(v) => set('attendance_checkout', v)}
+        />
         <div className="grid gap-4 py-4 sm:grid-cols-2">
           <NumberSetting
-            label="Minutes before a check-out counts"
+            label="Visits allowed per day"
+            min={1}
+            max={20}
+            suffix="visits"
+            value={draft.attendance_max_visits_per_day}
+            onChange={(v) => set('attendance_max_visits_per_day', v)}
+            hint="For example 3 for morning, afternoon and night (1–20)."
+            error={errors.attendance_max_visits_per_day}
+          />
+          {draft.attendance_checkout && (
+            <NumberSetting
+              label="Longest visit"
+              min={1}
+              max={12}
+              suffix="hours"
+              value={draft.attendance_max_visit_hours}
+              onChange={(v) => set('attendance_max_visit_hours', v)}
+              hint="A check-in older than this counts as a forgotten check-out: the next scan starts a new visit (1–12)."
+              error={errors.attendance_max_visit_hours}
+            />
+          )}
+          <NumberSetting
+            label="Ignore repeat scans for"
             min={1}
             max={240}
             suffix="min"
             value={draft.attendance_cooldown_minutes}
             onChange={(v) => set('attendance_cooldown_minutes', v)}
-            hint="Scans closer together are treated as duplicates (1–240)."
+            hint="A second scan within this time changes nothing, so a double scan never checks a member out (1–240)."
             error={errors.attendance_cooldown_minutes}
           />
           <NumberSetting

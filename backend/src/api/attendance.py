@@ -1,8 +1,9 @@
-"""/api/attendance — QR scans, manual check-in, the daily log and trends."""
+"""/api/attendance — QR scans, manual check-in / check-out, the daily log and trends."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -27,14 +28,15 @@ async def scan(body: ScanIn, ctx: Ctx = Depends(team_ctx)) -> FastJSON:
 @router.post("")
 async def mark(body: MarkAttendanceIn, ctx: Ctx = Depends(team_ctx)) -> FastJSON:
     await ensure_member_access(ctx.db, ctx.user, body.member_id)
-    return ok(await AttendanceService(ctx).mark(body.member_id))
+    return ok(await AttendanceService(ctx).mark(body.member_id, body.action))
 
 
 @router.get("")
-async def day_log(day: date | None = Query(None, alias="date"), page: Page = Depends(pagination(50, 100)),
-                  ctx: Ctx = Depends(team_ctx)) -> FastJSON:
+async def day_log(day: date | None = Query(None, alias="date"), show: Literal["all", "in_gym"] = Query("all"),
+                  page: Page = Depends(pagination(50, 100)), ctx: Ctx = Depends(team_ctx)) -> FastJSON:
+    """One row per member for the day, with every visit (check-in / check-out) nested."""
     trainer = ctx.user.trainer_id if ctx.user.role == "TRAINER" else None
-    return ok(await AttendanceService(ctx).day_log(page, day or ctx.clock.today(), trainer_id=trainer))
+    return ok(await AttendanceService(ctx).day_log(page, day or ctx.clock.today(), trainer_id=trainer, in_gym_only=show == "in_gym"))
 
 
 @router.get("/trend")

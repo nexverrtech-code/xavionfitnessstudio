@@ -179,6 +179,12 @@
 }
 
 @layer base {
+  /* A grid's default single column never grows past its container: long unwrapped text in a
+     card (activity titles, names) cannot push the page wider than a phone screen. Any
+     grid-cols-* utility still wins (zero specificity). */
+  :where(.grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
@@ -230,6 +236,10 @@
   }
   .pb-safe {
     padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+  /* Installed iPhone app (black-translucent status bar): keep headers below the clock/notch. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .skeleton {
     background: linear-gradient(90deg, var(--color-hover) 0%, var(--color-line) 50%, var(--color-hover) 100%);

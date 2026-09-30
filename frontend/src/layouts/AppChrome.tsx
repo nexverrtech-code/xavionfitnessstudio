@@ -31,7 +31,7 @@ import { useTheme, type ThemePreference } from '@/contexts/ThemeContext'
 import { useApi } from '@/hooks/useApi'
 import { useClickOutside } from '@/hooks/useUtilities'
 import { bottomNavFor, navFor } from '@/routes/navigation'
-import { dashboardApi } from '@/services/endpoints'
+import { membershipsApi, paymentsApi } from '@/services/endpoints'
 import { cn } from '@/utils/cn'
 import { formatMoney } from '@/utils/format'
 
@@ -134,6 +134,7 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`Account: ${user.name}`}
         className="flex items-center gap-2 rounded-xl p-1 pr-2 hover:bg-hover"
       >
         <Avatar name={user.name} size="sm" />
@@ -182,10 +183,13 @@ function NotificationBell({ staff }: { staff: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const location = useLocation()
   useClickOutside(ref, () => setOpen(false), open)
-  // One lightweight request per page visit — no background polling.
-  const summary = useApi(staff ? 'dashboard:summary' : null, () => dashboardApi.summary())
+  // Two small counts (not the whole dashboard): payment and membership changes refresh them,
+  // attendance scans don't. No background polling.
+  const pendingList = useApi(staff ? 'payments:pending:count' : null, () => paymentsApi.pending({ limit: 1 }))
+  // Same request as the dashboard's "Expiring this week" card: one call serves both there.
+  const renewals = useApi(staff ? 'memberships:renewals:dashboard' : null, () => membershipsApi.renewals({ window: 'upcoming', limit: 6 }))
   const inbox = useInbox()
-  const { reload } = summary
+  const { reload } = pendingList
   const reloadInbox = inbox.reload
   useEffect(() => {
     const onVisible = () => {
@@ -198,8 +202,8 @@ function NotificationBell({ staff }: { staff: boolean }) {
   }, [reload, reloadInbox, staff])
   useEffect(() => setOpen(false), [location.pathname])
 
-  const pending = summary.data?.pending_payments.count ?? 0
-  const expiring = summary.data?.members.expiring ?? 0
+  const pending = pendingList.data?.total ?? 0
+  const expiring = renewals.data?.total ?? 0
   const badge = pending + inbox.unread
   const label = `Notifications${pending ? `, ${pending} payment${pending === 1 ? '' : 's'} to verify` : ''}${inbox.unread ? `, ${inbox.unread} unread` : ''}`
   return (
@@ -218,7 +222,7 @@ function NotificationBell({ staff }: { staff: boolean }) {
                   <span className="block text-sm font-semibold text-ink">
                     {pending} UPI payment{pending === 1 ? '' : 's'} to verify
                   </span>
-                  <span className="block text-[12px] text-muted">{formatMoney(summary.data?.pending_payments.amount ?? 0)} awaiting approval</span>
+                  <span className="block text-[12px] text-muted">{formatMoney(pendingList.data?.pending_amount ?? 0)} awaiting approval</span>
                 </span>
               </Link>
               <Link to="/memberships" className="flex items-center gap-3 rounded-xl p-2.5 hover:bg-hover">
@@ -257,7 +261,7 @@ export function Topbar({ onMore }: { onMore: () => void }) {
   const actions = useActions()
   const staff = user?.role === 'ADMIN' || user?.role === 'STAFF'
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-surface/85 backdrop-blur-md supports-[backdrop-filter]:bg-surface/70">
+    <header className="pt-safe sticky top-0 z-20 border-b border-line bg-surface/85 backdrop-blur-md supports-[backdrop-filter]:bg-surface/70">
       <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:px-8">
         <IconButton icon={MenuIcon} label="Open menu" onClick={onMore} className="-ml-2 lg:hidden" />
         <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden" aria-label="Home">

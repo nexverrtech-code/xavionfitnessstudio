@@ -68,7 +68,8 @@ export default function MembersPage() {
   const query_ = { q: params.get('q') ?? undefined, status: status === 'ALL' ? undefined : status, sort, trainer_id: trainer || undefined, page, limit }
   const key = `members:list:${JSON.stringify(query_)}`
   const list = useApi(key, () => membersApi.list(query_), { keepPrevious: true })
-  const trainers = useApi(staff ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'))
+  // Trainer changes invalidate 'trainers'; otherwise the list (with member counts) is reused for 10 minutes.
+  const trainers = useApi(staff ? 'trainers:active' : null, () => trainersApi.list('ACTIVE'), { freshMs: 600_000 })
 
   const filtered = !!(params.get('q') || status !== 'ALL' || trainer)
   const columns: Column<MemberListItem>[] = [
@@ -129,7 +130,7 @@ export default function MembersPage() {
             items={[
               { label: 'Open workspace', icon: Eye, onSelect: () => navigate(`/members/${m.id}`) },
               { label: m.membership.expiry_date ? 'Renew membership' : 'Add membership', icon: RefreshCw, onSelect: () => actions.collectPayment({ memberId: m.id }), hidden: !staff },
-              { label: 'Mark attendance', icon: CalendarCheck2, onSelect: () => void actions.markAttendance({ id: m.id, name: m.name }) },
+              { label: 'Check in / out', icon: CalendarCheck2, onSelect: () => void actions.markAttendance({ id: m.id, name: m.name }) },
             ]}
           />
         </div>

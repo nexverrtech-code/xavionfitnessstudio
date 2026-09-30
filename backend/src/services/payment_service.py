@@ -31,6 +31,7 @@ from utils.upi import build_upi_uri, normalize_reference, normalize_utr
 from . import settings_service
 from .context import Ctx
 from .membership_rules import coverage_state, membership_out
+from .message_service import MessageService
 from .notification_service import NotificationService
 
 DUPLICATE_REFERENCE = "This transaction reference has already been submitted."
@@ -80,6 +81,7 @@ class PaymentService:
         self.members = MemberRepository(ctx.db)
         self.plans = PlanRepository(ctx.db)
         self.notifications = NotificationService(ctx)
+        self.messages = MessageService(ctx)
 
     # -- shared checks -------------------------------------------------------------------------
     async def _member_and_plan(self, member_id: int, plan_id: int) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -129,7 +131,8 @@ class PaymentService:
                 ("MEMBERSHIP_RENEWED" if renewal else "MEMBERSHIP_ACTIVATED",
                  {"plan": membership["plan_name"], "start": format_date(membership["start_date"]), "end": format_date(membership["end_date"])})
             )
-        return await self.notifications.statements(member, events)
+        return [*await self.notifications.statements(member, events),
+                *await self.messages.payment_statements(member, payment, membership)]
 
     # -- UPI details (desk QR and member app) ----------------------------------------------------
     async def upi_details(self, *, member_code: str, plan: dict[str, Any]) -> dict[str, Any]:
@@ -216,17 +219,22 @@ class PaymentService:
         }
 
     # -- Direct UPI from the member app -------------------------------------------------------------
-    async def submit_upi(self, member_id: int, plan_id: int, utr_text: str) -> dict[str, Any]:
+    async def submit_upi(self, member_id: int, plan_id: int, utr_text: str | None) -> dict[str, Any]:
+        """The UTR is optional: staff confirm the credit in the gym's UPI / bank app before approving
+        (the payment note carries the member ID and plan). A UTR, when given, must be valid and unused."""
         settings = await self.ctx.settings()
         if not (settings["upi_enabled"] and settings["upi_id"]):
             raise Conflict("UPI payments are not set up yet. Please pay at the front desk.")
-        utr = normalize_utr(utr_text)
-        if not utr:
-            raise ValidationFailed("Enter the 12-digit UTR from your UPI app.", fields={"utr": "The UTR / UPI reference number has 12 digits"})
+        utr = None
+        if utr_text:
+            utr = normalize_utr(utr_text)
+            if not utr:
+                raise ValidationFailed("The UTR has 12 digits. Check it, or leave it empty.",
+                                       fields={"utr": "The UTR / UPI reference number has 12 digits"})
         member, plan = await self._member_and_plan(member_id, plan_id)
         if member["status"] == "SUSPENDED":
             raise Conflict("Your membership is on hold. Please contact the front desk.")
-        if await self.payments.reference_in_use(utr):
+        if utr and await self.payments.reference_in_use(utr):
             raise Conflict(DUPLICATE_REFERENCE, fields={"utr": "Already submitted"})
         today = self.ctx.clock.today()
         try:

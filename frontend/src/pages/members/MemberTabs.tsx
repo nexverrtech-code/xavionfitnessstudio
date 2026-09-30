@@ -8,10 +8,10 @@ import {
   Dumbbell,
   KeyRound,
   LineChart,
+  LogOut,
   MoreVertical,
   Pencil,
   Plus,
-  QrCode,
   Receipt,
   RefreshCw,
   Ruler,
@@ -23,6 +23,7 @@ import { lazy, Suspense, useState } from 'react'
 import { PaymentDetailDialog } from '@/components/billing/PaymentDetailDialog'
 import { RefundDialog } from '@/components/billing/RefundDialog'
 import { MemberPicker } from '@/components/members/MemberPicker'
+import { VisitChips } from '@/components/attendance/Visits'
 import { AttendanceCalendar } from '@/components/members/AttendanceCalendar'
 import { ACCESS_LABEL, accessState } from '@/components/members/AppAccessDialog'
 import { MetricTiles } from '@/components/training/MetricTiles'
@@ -43,7 +44,7 @@ import { invalidate, useApi } from '@/hooks/useApi'
 import { useReceipt } from '@/hooks/useReceipt'
 import { membersApi, membershipsApi, progressApi, workoutsApi } from '@/services/endpoints'
 import type { ActivityEvent, Measurement, MemberListItem, MemberWorkspace, Metric, Payment, Workout } from '@/types'
-import { formatDate, formatMoney, formatTime, METHOD_LABELS, relativeTime, todayISO } from '@/utils/format'
+import { durationLabel, formatDate, formatMoney, METHOD_LABELS, relativeTime, todayISO } from '@/utils/format'
 import { METRIC_META } from '@/utils/metrics'
 
 const ProgressChart = lazy(() => import('@/components/charts/ProgressChart'))
@@ -370,55 +371,54 @@ export function PaymentsTab({ member }: TabProps) {
 // -- Attendance ------------------------------------------------------------------------------
 export function AttendanceTab({ member }: TabProps) {
   const actions = useActions()
-  const [month, setMonth] = useState(todayISO().slice(0, 7))
+  const today = todayISO()
+  const [month, setMonth] = useState(today.slice(0, 7))
   const history = useApi(`member:${member.id}:attendance:${month}`, () => membersApi.attendance(member.id, month), { keepPrevious: true })
+  // Today's visits (when this month is shown) decide whether the button checks in or out.
+  const todays = month === today.slice(0, 7) ? history.data?.items.find((d) => d.date === today) : undefined
+  const inside = !!todays?.visits.some((v) => v.open)
   return (
     <div className="grid gap-4 lg:grid-cols-5">
       <Card className="lg:col-span-2">
         <CardHeader
-          title="Visits"
-          description={`${member.stats.visits_this_month} this month · ${member.stats.visits_total} total`}
+          title="Days present"
+          description={`${member.stats.visits_this_month} this month · ${member.stats.visits_total} in total`}
           action={
-            <Button size="sm" variant="soft" icon={CalendarCheck2} onClick={() => actions.markAttendance({ id: member.id, name: member.name })}>
-              Mark today
+            <Button
+              size="sm"
+              variant="soft"
+              icon={inside ? LogOut : CalendarCheck2}
+              onClick={() => actions.markAttendance({ id: member.id, name: member.name }, inside ? 'OUT' : 'IN')}
+            >
+              {inside ? 'Check out' : 'Check in'}
             </Button>
           }
         />
         <div className="px-5 pb-5">
-          {history.data ? <AttendanceCalendar month={month} visits={history.data.items} onMonth={setMonth} /> : <Skeleton className="h-64 rounded-xl" />}
+          {history.data ? <AttendanceCalendar month={month} days={history.data.items} onMonth={setMonth} /> : <Skeleton className="h-64 rounded-xl" />}
         </div>
       </Card>
       <Card className="lg:col-span-3">
-        <CardHeader title="Check-in log" />
+        <CardHeader title="Visit log" description={history.data ? `${history.data.visits} visit${history.data.visits === 1 ? '' : 's'} on ${history.data.days} day${history.data.days === 1 ? '' : 's'}` : undefined} />
         {history.error && !history.data ? (
           <ErrorState compact error={history.error} onRetry={history.reload} />
         ) : (
           <DataList
             rows={history.data?.items}
             loading={history.loading}
-            rowKey={(v) => v.id}
+            rowKey={(d) => d.date}
             columns={[
-              { key: 'date', header: 'Date', cell: (v) => formatDate(v.date, { weekday: true, withYear: false }) },
-              { key: 'in', header: 'Check-in', cell: (v) => formatTime(v.check_in) },
-              { key: 'out', header: 'Check-out', cell: (v) => (v.check_out ? formatTime(v.check_out) : '—') },
-              {
-                key: 'method',
-                header: 'Method',
-                cell: (v) => (
-                  <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-2">
-                    {v.method === 'QR' ? <QrCode className="size-3.5 text-muted" aria-hidden /> : <CalendarCheck2 className="size-3.5 text-muted" aria-hidden />}
-                    {v.method === 'QR' ? 'QR scan' : 'Manual'}
-                  </span>
-                ),
-              },
+              { key: 'date', header: 'Date', cell: (d) => <span className="whitespace-nowrap">{formatDate(d.date, { weekday: true, withYear: false })}</span> },
+              { key: 'visits', header: 'Visits', cell: (d) => <VisitChips visits={d.visits} /> },
+              { key: 'time', header: 'Time in gym', align: 'right', cell: (d) => (d.minutes ? <span className="tabular whitespace-nowrap">{durationLabel(d.minutes)}</span> : <span className="text-faint">—</span>) },
             ]}
-            mobile={(v) => (
-              <div className="flex justify-between text-sm">
-                <span className="font-medium text-ink">{formatDate(v.date, { weekday: true, withYear: false })}</span>
-                <span className="text-muted">
-                  {formatTime(v.check_in)}
-                  {v.check_out && ` → ${formatTime(v.check_out)}`} · {v.method === 'QR' ? 'QR' : 'Manual'}
-                </span>
+            mobile={(d) => (
+              <div className="space-y-2">
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="font-medium text-ink">{formatDate(d.date, { weekday: true, withYear: false })}</span>
+                  <span className="tabular text-muted">{d.minutes ? durationLabel(d.minutes) : `${d.visits.length} visit${d.visits.length === 1 ? '' : 's'}`}</span>
+                </div>
+                <VisitChips visits={d.visits} />
               </div>
             )}
             empty={<EmptyState compact icon={CalendarCheck2} title="No visits this month" description="Check-ins from the QR scanner appear here instantly." />}

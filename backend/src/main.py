@@ -1,7 +1,8 @@
 """Cloudflare Python Worker entrypoint for the SmartGym API.
 
 - fetch     -> FastAPI (ASGI) running inside the Worker, with the D1 binding as ``env.DB``
-- scheduled -> the daily Cron Trigger (statuses, reminders, clean-up, storage snapshot)
+- scheduled -> the daily Cron Trigger (statuses, reminders, clean-up, storage snapshot) and the
+               every-minute trigger that sends queued WhatsApp / email messages
 
 No separate server (and no Uvicorn) is used in production: the Workers runtime is the entry
 point. The FastAPI app is created at import time so it is captured in the Workers memory
@@ -31,7 +32,11 @@ class Default(WorkerEntrypoint):
     async def scheduled(self, controller, env=None, ctx=None):
         from core.config import config_from_worker_env
         from core.database.d1 import D1Database
-        from jobs.scheduler import run_daily_jobs
+        from jobs.scheduler import DAILY_CRON, run_daily_jobs, send_messages
 
         worker_env = env if env is not None else self.env
-        await run_daily_jobs(D1Database(worker_env.DB), config_from_worker_env(worker_env))
+        db, config = D1Database(worker_env.DB), config_from_worker_env(worker_env)
+        if str(getattr(controller, "cron", DAILY_CRON)) == DAILY_CRON:
+            await run_daily_jobs(db, config)
+        else:
+            await send_messages(db, config)

@@ -216,9 +216,10 @@ export const trainersApi = {
 
 export const attendanceApi = {
   scan: (code: string) => post<ScanResult>('/attendance/scan', { code }),
-  mark: (member_id: number) => post<ScanResult>('/attendance', { member_id }),
+  /** No action: like a scan (check in, or check out when inside). 'IN' / 'OUT' make it explicit. */
+  mark: (member_id: number, action?: 'IN' | 'OUT') => post<ScanResult>('/attendance', { member_id, ...(action ? { action } : {}) }),
   log: (params: Query) => get<AttendanceLog>('/attendance', params),
-  trend: (days = 30) => get<{ items: { date: string; visits: number }[] }>('/attendance/trend', { days }),
+  trend: (days = 30) => get<{ items: { date: string; members: number; visits: number }[] }>('/attendance/trend', { days }),
   remove: (id: number) => del(`/attendance/${id}`),
 }
 

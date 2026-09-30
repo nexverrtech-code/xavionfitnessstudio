@@ -3,15 +3,21 @@ hard-coded. Revenue = money collected (PAID, incl. later-refunded payments) minu
 
 from __future__ import annotations
 
-from datetime import timedelta
+import json
+from datetime import date, timedelta
 from typing import Any
 
+from core.cache import TTLCache
 from core.clock import add_months, iso_z
 from repositories.dashboard import DashboardRepository
 from utils.formatting import format_inr
 
+from .attendance_service import VisitRules
 from .context import Ctx
 from .storage_service import storage_level
+
+
+_history = TTLCache(3600, 16)
 
 
 class DashboardService:
@@ -24,12 +30,15 @@ class DashboardService:
         month_start = today.replace(day=1)
         prev_month_start = add_months(month_start, -1)
         prev_same_day = min(add_months(today, -1), month_start - timedelta(days=1))
+        rules = VisitRules.build(await self.ctx.settings(), self.ctx.now)
         members, expiring, attendance, collected, refunds, pending, expenses, snapshot = await self.repo.summary(
             today=today.isoformat(), yesterday=(today - timedelta(days=1)).isoformat(),
             soon=(today + timedelta(days=7)).isoformat(), month_start=month_start.isoformat(),
             prev_month_start=prev_month_start.isoformat(), prev_same_day=prev_same_day.isoformat(),
+            open_after=rules.open_after,
         )
         m = members.first or {}
+        seen = attendance.first or {}
         paid, back = collected.first or {}, refunds.first or {}
         month_revenue = int(paid.get("month") or 0) - int(back.get("month") or 0)
         month_expenses = int((expenses.first or {}).get("total") or 0)
@@ -44,7 +53,13 @@ class DashboardService:
                 "expiring": (expiring.first or {}).get("c", 0),
                 "joined_this_month": m.get("joined_this_month", 0),
             },
-            "attendance": {"today": (attendance.first or {}).get("today", 0), "yesterday": (attendance.first or {}).get("yesterday", 0)},
+            # today / yesterday = members present (once a day however many visits).
+            "attendance": {
+                "today": seen.get("today", 0),
+                "yesterday": seen.get("yesterday", 0),
+                "visits_today": seen.get("today_visits", 0),
+                "in_gym": seen.get("in_gym", 0) if rules.checkout else None,
+            },
             "revenue": {
                 "today": int(paid.get("today") or 0) - int(back.get("today") or 0),
                 "month": month_revenue,
@@ -62,19 +77,42 @@ class DashboardService:
             out["storage"] = {"percent": round(percent, 1), "level": storage_level(percent), "as_of": snap["snapshot_date"]}
         return out
 
+    async def _chart_history(self, months: int, today: date, first_month: date, month_start: date,
+                             attendance_from: date) -> list[list[dict[str, Any]]]:
+        """Months before this one and days before today, computed at most once a day (this isolate's
+        memory, then one D1 row) instead of on every dashboard visit: the bulk of the chart rows.
+        ponytail: a change dated in an earlier month (or a removed past visit) reaches the charts the
+        next day; reports always read live. Clear dashboard_cache if it must show at once."""
+        key = f"charts:{months}:{today.isoformat()}"
+        history = _history.get(key)
+        if history is None:
+            raw = await self.repo.cached(key)
+            if raw:
+                history = json.loads(raw)
+            else:
+                results = await self.repo.chart_history(first_month=first_month.isoformat(), month_start=month_start.isoformat(),
+                                                        attendance_from=attendance_from.isoformat(), today=today.isoformat())
+                history = [r.rows for r in results]
+                await self.repo.cache(key, json.dumps(history, separators=(",", ":")), self.ctx.now)
+            _history.set(key, history)
+        return history
+
     async def charts(self, months: int = 6) -> dict[str, Any]:
         today = self.ctx.clock.today()
-        first_month = add_months(today.replace(day=1), -(months - 1))
+        month_start = today.replace(day=1)
+        first_month = add_months(month_start, -(months - 1))
         attendance_from = today - timedelta(days=29)
-        revenue, refunds, expenses, memberships, visits, methods, plans = await self.repo.charts(
-            first_month=first_month.isoformat(), today=today.isoformat(), attendance_from=attendance_from.isoformat(),
-            month_start=today.replace(day=1).isoformat(),
+        past = await self._chart_history(months, today, first_month, month_start, attendance_from)
+        *live, methods, plans = await self.repo.chart_live(
+            month_start=month_start.isoformat(), today=today.isoformat(), tomorrow=(today + timedelta(days=1)).isoformat()
         )
-        revenue_by = {r["month"]: r for r in revenue.rows}
-        refunds_by = {r["month"]: r["refunds"] for r in refunds.rows}
-        expenses_by = {r["month"]: r["total"] for r in expenses.rows}
-        memberships_by = {r["month"]: r for r in memberships.rows}
-        visits_by = {r["date"]: r["visits"] for r in visits.rows}
+        # Past and live rows never overlap (earlier months / days vs this month / today).
+        revenue, refunds, expenses, memberships, visits = (old + new.rows for old, new in zip(past, live))
+        revenue_by = {r["month"]: r for r in revenue}
+        refunds_by = {r["month"]: r["refunds"] for r in refunds}
+        expenses_by = {r["month"]: r["total"] for r in expenses}
+        memberships_by = {r["month"]: r for r in memberships}
+        visits_by = {r["date"]: r for r in visits}
         month_keys = [add_months(first_month, i).strftime("%Y-%m") for i in range(months)]
         return {
             "revenue_trend": [
@@ -95,7 +133,12 @@ class DashboardService:
                 for key in month_keys
             ],
             "attendance_trend": [
-                {"date": (d := (attendance_from + timedelta(days=i)).isoformat()), "visits": visits_by.get(d, 0)} for i in range(30)
+                {
+                    "date": (d := (attendance_from + timedelta(days=i)).isoformat()),
+                    "members": visits_by.get(d, {}).get("members", 0),
+                    "visits": visits_by.get(d, {}).get("visits", 0),
+                }
+                for i in range(30)
             ],
             "payment_methods": methods.rows,
             "plan_distribution": plans.rows,

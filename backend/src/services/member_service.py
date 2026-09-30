@@ -6,14 +6,14 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from core.clock import iso_z
+from core.clock import iso_z, minutes_between
 from core.database import IntegrityError
 from core.errors import Conflict, NotFound, ValidationFailed
 from repositories.members import MemberRepository
 from repositories.trainers import TrainerRepository
 from repositories.users import UserRepository
 from security.qr import new_qr_token, qr_payload
-from utils.formatting import escape_like, member_code_candidates
+from utils.formatting import duration_label, escape_like, member_code_candidates
 
 from .context import Ctx
 from .membership_rules import coverage_state, membership_out
@@ -222,6 +222,7 @@ class MemberService:
             "emergency_contact": member["emergency_contact"],
             "joining_date": member["joining_date"],
             "status": member["status"],
+            "messages": not member["messages_opt_out"],
             "trainer": {"id": member["trainer_id"], "name": member["trainer_name"]} if member["trainer_id"] else None,
             "membership": {
                 **coverage_state(expiry, today),
@@ -258,6 +259,9 @@ class MemberService:
         for r in results[0].rows:
             events.append({"type": "ATTENDANCE", "at": iso_z(r["check_in"]),
                            "title": "Checked in" + (" (manual)" if r["method"] == "MANUAL" else ""), "ref": r["id"]})
+            if r["check_out"]:
+                events.append({"type": "ATTENDANCE", "at": iso_z(r["check_out"]),
+                               "title": f"Checked out · {duration_label(minutes_between(r['check_in'], r['check_out']))}", "ref": r["id"]})
         for r in results[1].rows:
             label = "Membership cancelled" if r["status"] == "CANCELLED" else "Membership activated"
             events.append({"type": "MEMBERSHIP", "at": iso_z(r["created_at"]), "title": f"{label} · {r['plan_name']}", "ref": r["id"]})

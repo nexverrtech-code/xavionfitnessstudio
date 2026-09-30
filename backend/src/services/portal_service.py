@@ -13,6 +13,7 @@ from repositories.memberships import MembershipRepository
 from repositories.payments import PaymentRepository
 from repositories.portal import PortalRepository
 
+from .attendance_service import VisitRules
 from .context import Ctx
 from .membership_rules import coverage_state, membership_out
 from .payment_service import payment_out
@@ -28,10 +29,11 @@ class PortalService:
         """The member home screen in one round trip."""
         today = self.ctx.clock.today()
         strip_start = today - timedelta(days=13)
+        rules = VisitRules.build(await self.ctx.settings(), self.ctx.now)
         (member_r, memberships_r, attendance_r, visits_r, payment_r, workout_r, notification_r, unread_r,
          pending_r) = await PortalRepository(self.ctx.db).overview(
             member_id=self.member_id, user_id=self.ctx.user.id if self.ctx.user else 0, today=today.isoformat(),
-            month_start=today.replace(day=1).isoformat(), strip_start=strip_start.isoformat(),
+            month_start=today.replace(day=1).isoformat(), strip_start=strip_start.isoformat(), open_after=rules.open_after,
         )
         member = member_r.first
         if not member:
@@ -55,9 +57,11 @@ class PortalService:
                 if pending else None
             ),
             "attendance": {
-                "this_month": attendance.get("this_month", 0),
+                "this_month": attendance.get("this_month", 0),  # days present
                 "last_check_in": iso_z(attendance.get("last_check_in")),
-                "checked_in_today": bool(attendance.get("today_check_in")),
+                "checked_in_today": bool(attendance.get("today_visits")),
+                "visits_today": attendance.get("today_visits", 0),
+                "inside_since": iso_z(attendance.get("inside_since")),
                 "last_14_days": [
                     {"date": (d := (strip_start + timedelta(days=i)).isoformat()), "visited": d in visited} for i in range(14)
                 ],
@@ -72,10 +76,12 @@ class PortalService:
         row = await self.members.profile(self.member_id)
         if not row:
             raise NotFound("Member not found.")
-        return row
+        return {**row, "messages": bool(row["messages"])}
 
-    async def update_profile(self, *, email: str | None, address: str | None, emergency_contact: str | None) -> dict[str, Any]:
-        await self.members.update_contact(self.member_id, email=email, address=address, emergency=emergency_contact, now=self.ctx.now)
+    async def update_profile(self, *, email: str | None, address: str | None, emergency_contact: str | None,
+                             messages: bool | None = None) -> dict[str, Any]:
+        await self.members.update_contact(self.member_id, email=email, address=address, emergency=emergency_contact, now=self.ctx.now,
+                                          messages=messages)
         return await self.profile()
 
     async def membership(self) -> dict[str, Any]:
