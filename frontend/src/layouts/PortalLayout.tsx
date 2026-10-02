@@ -16,6 +16,7 @@ export default function PortalLayout() {
   const overview = useApi('portal:overview', () => portalApi.overview())
   const unread = overview.data?.unread_notifications ?? 0
   return (
+    /*hudc */
     <div className="min-h-dvh">
       <OfflineBanner />
       <header className="pt-safe sticky top-0 z-20 border-b border-line/70 bg-canvas/85 backdrop-blur-md">
