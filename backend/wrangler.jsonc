@@ -5,10 +5,16 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["python_workers"],
 
-  // The API on its own subdomain (the zone must be on Cloudflare): https://api.gymname.com/api/...
-  // "routes": [{ "pattern": "api.gymname.com", "custom_domain": true }],
-  "routes": [{ "pattern": "xavion.nexverrtech.com/api/*", "zone_name": "nexverrtech.com" }],
+  // One Worker serves the whole site on its own domain (Cloudflare creates the DNS record and
+  // certificate): /api/* runs the Python API, everything else is the React app from ../frontend/dist.
+  // Build the frontend first (cd frontend && npm run build, VITE_API_URL empty = same origin).
+  "routes": [{ "pattern": "xavion.nexverrtech.com", "custom_domain": true }],
   "workers_dev": false,
+  "assets": {
+    "directory": "../frontend/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
 
   // Never hard-code database ids or secrets in application code: the Worker reaches D1
   // only through this binding (self.env.DB).
@@ -17,7 +23,7 @@
       "binding": "DB",
       "database_name": "smartgym-db",
       // Replace with the id printed by: npx wrangler d1 create smartgym-db
-      "database_id": "ccfd7063-8537-403f-9e48-70b92d2d193d",
+      "database_id": "4aa65ff7-1270-447e-826e-8040e98f6fd1",
       "migrations_dir": "migrations"
     }
   ],
@@ -38,7 +44,7 @@
   // CF_API_TOKEN, WHATSAPP_TOKEN and RESEND_API_KEY) are set with `npx wrangler secret put NAME` — never here.
   "vars": {
     "ENVIRONMENT": "production",
-    "ALLOWED_ORIGINS": "https://xavion.nexverrtech.com,https://www.xavion.nexverrtech.com",
+    "ALLOWED_ORIGINS": "https://xavion.nexverrtech.com",
     "GYM_TIMEZONE": "Asia/Kolkata",
     "GYM_UTC_OFFSET_MINUTES": "330",
     "DEFAULT_COUNTRY_CODE": "91",

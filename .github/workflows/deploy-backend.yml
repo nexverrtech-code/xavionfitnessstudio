@@ -1,16 +1,40 @@
-name: Deploy Backend
+name: Deploy
+# One Worker serves the whole site (xavion.nexverrtech.com): the React app from frontend/dist
+# and the Python API on /api/*. Every push to main rebuilds the app, applies any new D1
+# migrations (safe to re-run: already-applied ones are skipped) and deploys.
 on:
   push:
     branches: [main]
-    paths: ['backend/**']
+    paths: ['backend/**', 'frontend/**', '.github/workflows/**']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}  # needs Workers Scripts:Edit and D1:Edit
+      CLOUDFLARE_ACCOUNT_ID: 2f04b4b8fa30267beba88b53e94a8d67
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the web app (same origin, so VITE_API_URL stays empty)
+        run: cd frontend && npm ci && npm run build
+
       - uses: astral-sh/setup-uv@v3
       - run: cd backend && uv sync
-      - run: cd backend && uv run pywrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Tests
+        run: cd backend && uv run pytest -q
+
+      - name: Apply database migrations
+        run: cd backend && npx --yes wrangler@4 d1 migrations apply smartgym-db --remote
+      - name: Deploy app + API
+        run: cd backend && uv run pywrangler deploy

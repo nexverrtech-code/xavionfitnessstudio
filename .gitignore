@@ -11,13 +11,13 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
-backend/python_modules/
-backend/.local/
+python_modules/
+.local/
 
 # Wrangler / Node
 .wrangler/
 node_modules/
-frontend/dist/
+dist/
 *.log
 
 # OS / editors
@@ -26,9 +26,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Local runtime tooling (uv / pywrangler)
-backend/.uv/
-backend/.venv-workers/
+# Local runtime tooling
+.uv/
+.venv-workers/
 
-# Files moved aside during refactors (kept locally so nothing is lost; safe to delete)
+# Files moved aside during refactors
 .snapshots/
+backend/.setup-token.txt
