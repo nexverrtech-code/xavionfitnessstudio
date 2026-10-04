@@ -65,6 +65,9 @@ def test_members_can_stop_messages(connected, admin, plans, db):
     pay(client, admin, quiet["id"], plans["Monthly"])
     assert _outbox(db) == []
     assert client.get(f"/api/members/{quiet['id']}", headers=admin).json()["messages"] is False
+    edit = {"name": "Aarav S", "phone": quiet["phone"], "joining_date": quiet["joining_date"]}  # the edit form omits it
+    assert client.put(f"/api/members/{quiet['id']}", json=edit, headers=admin).status_code == 200
+    assert client.get(f"/api/members/{quiet['id']}", headers=admin).json()["messages"] is False
 
     created = create_member(client, admin, name="Priya Nair", phone="9876500002")
     headers = activate_login(client, created["credentials"]["login"], created["credentials"]["temporary_password"])
@@ -131,17 +134,18 @@ def test_the_sender_records_each_result(connected, admin, plans, db, monkeypatch
     assert tuple(failed) == ("FAILED", "Email 422: Invalid to address")
 
 
-def test_upi_renewal_without_a_utr(connected, admin, plans, db, upi_enabled):
+def test_upi_renewal_needs_a_utr_and_sends_one_receipt(connected, admin, plans, db, upi_enabled):
     client, _ = connected
     created = create_member(client, admin, email="aarav@example.com")
     member = created["member"]
     headers = activate_login(client, created["credentials"]["login"], created["credentials"]["temporary_password"])
-    submitted = client.post("/api/me/renewals", json={"plan_id": plans["Monthly"]["id"]}, headers=headers)
+    for body in ({"plan_id": plans["Monthly"]["id"]}, {"plan_id": plans["Monthly"]["id"], "utr": "123"}):
+        bad = client.post("/api/me/renewals", json=body, headers=headers)
+        assert bad.status_code == 422 and "utr" in bad.json()["error"]["fields"]
+    submitted = client.post("/api/me/renewals", json={"plan_id": plans["Monthly"]["id"], "utr": "412345678901"}, headers=headers)
     assert submitted.status_code == 201, submitted.text
     payment = submitted.json()["payment"]
-    assert payment["status"] == "PENDING" and payment["transaction_reference"] is None
-    bad = client.post("/api/me/renewals", json={"plan_id": plans["Monthly"]["id"], "utr": "123"}, headers=headers)
-    assert bad.status_code == 422 and "utr" in bad.json()["error"]["fields"]
+    assert payment["status"] == "PENDING" and payment["transaction_reference"] == "412345678901"
 
     _switch_on(client, admin)
     approved = client.post(f"/api/payments/{payment['id']}/approve", headers=admin)

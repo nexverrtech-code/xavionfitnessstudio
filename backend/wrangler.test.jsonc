@@ -1,0 +1,40 @@
+{
+  // Separate TEST deployment (own Worker + own D1 database) on a workers.dev URL.
+  // Production stays in wrangler.jsonc. Use with:  --config wrangler.test.jsonc
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "smartgym-api-test",
+  "main": "src/main.py",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["python_workers"],
+  "workers_dev": true,
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "smartgym-db-test",
+      "database_id": "242026c3-619b-415f-ae3c-fa87ab87f18c",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "triggers": { "crons": ["30 0 * * *", "* * * * *"] },
+
+  "ratelimits": [
+    { "name": "LOGIN_LIMITER", "namespace_id": "4202", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  // Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN) via: npx wrangler secret put NAME --config wrangler.test.jsonc
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ALLOWED_ORIGINS": "https://smartgym-test.nexverrtech.workers.dev",
+    "GYM_TIMEZONE": "Asia/Kolkata",
+    "GYM_UTC_OFFSET_MINUTES": "330",
+    "DEFAULT_COUNTRY_CODE": "91",
+    "D1_MAX_BYTES": "500000000",
+    "D1_TIME_TRAVEL_DAYS": "7",
+    "D1_DATABASE_NAME": "smartgym-db-test",
+    "PASSWORD_ITERATIONS": "20000"
+  },
+
+  "observability": { "enabled": true }
+}

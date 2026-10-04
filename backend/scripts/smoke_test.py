@@ -29,6 +29,8 @@ def call(base: str, method: str, path: str, token: str | None = None, body: dict
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(base + path, data=data, method=method)
     request.add_header("Accept", "application/json")
+    # Cloudflare's browser check refuses the default Python-urllib agent (error 1010).
+    request.add_header("User-Agent", "SmartGym-smoke-test/1.0")
     if data is not None:
         request.add_header("Content-Type", "application/json")
     if token:

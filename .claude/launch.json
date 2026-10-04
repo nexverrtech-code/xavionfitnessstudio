@@ -12,6 +12,18 @@
       "runtimeExecutable": "backend/.venv/Scripts/python.exe",
       "runtimeArgs": ["backend/scripts/dev_server.py", "--seed"],
       "port": 8787
+    },
+    {
+      "name": "smartgym-workerd-local",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-riyaz-Downloads-NT-xavionstudio/2c4e795f-75db-42dc-b1f2-50b5259eb06d/scratchpad/workers-dev.sh"],
+      "port": 8787
+    },
+    {
+      "name": "smartgym-web-local",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-riyaz-Downloads-NT-xavionstudio/2039490f-6f17-4d27-ba57-229d0861165d/scratchpad/tools/node/bin/node",
+      "runtimeArgs": ["/private/tmp/claude-501/-Users-riyaz-Downloads-NT-xavionstudio/2039490f-6f17-4d27-ba57-229d0861165d/scratchpad/fe/node_modules/vite/bin/vite.js", "/private/tmp/claude-501/-Users-riyaz-Downloads-NT-xavionstudio/2039490f-6f17-4d27-ba57-229d0861165d/scratchpad/fe"],
+      "port": 5173
     }
   ]
 }

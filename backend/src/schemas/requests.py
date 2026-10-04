@@ -82,6 +82,7 @@ class MemberCreate(MemberBase):
 
 class MemberUpdate(MemberBase):
     joining_date: date
+    messages: bool | None = None  # omitted: unchanged (the edit form doesn't show it; the member may have opted out)
 
 
 class MemberStatusIn(Model):
@@ -151,7 +152,7 @@ class DeskPaymentIn(Model):
 
 class UpiSubmission(Model):
     plan_id: int
-    # Optional: staff verify the credit in the gym's UPI / bank app either way; the UTR only helps.
+    # Required (checked in PaymentService.submit_upi so the member gets the friendly UTR message).
     utr: Annotated[str | None, BeforeValidator(_empty_to_none), Field(max_length=20)] = None
 
 

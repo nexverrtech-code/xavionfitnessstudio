@@ -49,7 +49,8 @@ function smartgymPwa(apiUrl: string): Plugin {
       // An empty VITE_API_URL means same-origin (/api on this domain), already covered by 'self'.
       const apiOrigin = /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : ''
       // Allow only the exact inline theme bootstrap script in index.html (by hash).
-      const html = readFileSync(fileURLToPath(new URL('./index.html', import.meta.url)), 'utf8')
+      // Browsers hash the script text after turning CRLF into LF, so normalise a Windows checkout first.
+      const html = readFileSync(fileURLToPath(new URL('./index.html', import.meta.url)), 'utf8').replace(/\r\n?/g, '\n')
       const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
         (m) => `'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`,
       )

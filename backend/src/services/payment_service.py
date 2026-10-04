@@ -220,17 +220,15 @@ class PaymentService:
 
     # -- Direct UPI from the member app -------------------------------------------------------------
     async def submit_upi(self, member_id: int, plan_id: int, utr_text: str | None) -> dict[str, Any]:
-        """The UTR is optional: staff confirm the credit in the gym's UPI / bank app before approving
-        (the payment note carries the member ID and plan). A UTR, when given, must be valid and unused."""
+        """The member submits the 12-digit UTR; staff check it against the gym's UPI / bank app before
+        approving. The database requires a reference on every UPI payment (0002), so it is mandatory."""
         settings = await self.ctx.settings()
         if not (settings["upi_enabled"] and settings["upi_id"]):
             raise Conflict("UPI payments are not set up yet. Please pay at the front desk.")
-        utr = None
-        if utr_text:
-            utr = normalize_utr(utr_text)
-            if not utr:
-                raise ValidationFailed("The UTR has 12 digits. Check it, or leave it empty.",
-                                       fields={"utr": "The UTR / UPI reference number has 12 digits"})
+        utr = normalize_utr(utr_text or "")
+        if not utr:
+            raise ValidationFailed("Enter the 12-digit UTR / UPI reference number.",
+                                   fields={"utr": "The UTR / UPI reference number has 12 digits"})
         member, plan = await self._member_and_plan(member_id, plan_id)
         if member["status"] == "SUSPENDED":
             raise Conflict("Your membership is on hold. Please contact the front desk.")

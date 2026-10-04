@@ -83,11 +83,11 @@ class MemberRepository(Repository):
     async def update(self, member_id: int, values: dict[str, Any], now: str) -> int:
         result = await self.db.run(
             "UPDATE members SET name = ?2, phone = ?3, email = ?4, gender = ?5, date_of_birth = ?6, address = ?7, "
-            "emergency_contact = ?8, joining_date = ?9, updated_at = ?10, messages_opt_out = ?11 WHERE id = ?1",
+            "emergency_contact = ?8, joining_date = ?9, updated_at = ?10, messages_opt_out = COALESCE(?11, messages_opt_out) WHERE id = ?1",
             [
                 member_id, values["name"], values["phone"], values.get("email"), values.get("gender"),
                 values.get("date_of_birth"), values.get("address"), values.get("emergency_contact"),
-                values["joining_date"], now, 0 if values.get("messages", True) else 1,
+                values["joining_date"], now, None if values.get("messages") is None else int(not values["messages"]),
             ],
         )
         return result.changes

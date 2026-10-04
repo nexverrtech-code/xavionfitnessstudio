@@ -13,14 +13,16 @@ from typing import Any
 
 from .base import Database, DatabaseError, IntegrityError, JsonRows, Result, Statement
 
-_NUMBERED = re.compile(r"\?\d")
+_NUMBERED = re.compile(r"\?(\d+)")
 
 
 def _bindings(sql: str, params: list[Any]) -> Any:
     values = [int(p) if isinstance(p, bool) else p for p in params]
-    # D1 binds ?1, ?2 ... positionally; Python's sqlite3 treats them as named, so map by number.
-    if _NUMBERED.search(sql):
-        return {str(i): v for i, v in enumerate(values, start=1)}
+    # D1 binds ?1, ?2 ... positionally, also when a number is skipped (?1, ?2, ?5). Python's sqlite3
+    # binds a sequence by slot too, but needs exactly as many values as the highest number.
+    numbers = [int(n) for n in _NUMBERED.findall(sql)]
+    if numbers:
+        return values[: max(numbers)]
     return values
 
 
