@@ -95,7 +95,7 @@ def main() -> None:
     out: list[str] = ["-- SmartGym DEVELOPMENT seed data. Do NOT load into production."]
 
     def insert(table: str, row: dict) -> None:
-        out.append(f"INSERT INTO {table} ({', '.join(row)}) VALUES ({', '.join(q(v) for v in row.values())});")
+        out.append(f"INSERT OR IGNORE INTO {table} ({', '.join(row)}) VALUES ({', '.join(q(v) for v in row.values())});")
 
     def pw(text: str) -> str:
         return hash_password_sync(text, secret=secret, iterations=args.iterations)

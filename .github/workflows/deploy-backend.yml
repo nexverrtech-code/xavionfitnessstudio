@@ -2,10 +2,13 @@ name: Deploy
 # One Worker serves the whole site (xavion.nexverrtech.com): the React app from frontend/dist
 # and the Python API on /api/*. Every push to main rebuilds the app, applies any new D1
 # migrations (safe to re-run: already-applied ones are skipped) and deploys.
+# Manual only for now (GitHub -> Actions -> Deploy -> Run workflow): the production Worker and its
+# database were removed. Before turning pushes back on, create the database, put its id in
+# backend/wrangler.jsonc and add this block back:
+#   push:
+#     branches: [main]
+#     paths: ['backend/**', 'frontend/**', '.github/workflows/**']
 on:
-  push:
-    branches: [main]
-    paths: ['backend/**', 'frontend/**', '.github/workflows/**']
   workflow_dispatch:
 
 concurrency:

@@ -13,6 +13,13 @@ from typing import Any
 
 DEV_JWT_SECRET = "dev-only-insecure-jwt-secret-change-me"
 DEV_AUTH_SECRET = "dev-only-insecure-auth-secret-change-me"
+# Markers of the public example values (.dev.vars.example, the defaults above): never valid in production.
+_PLACEHOLDER_MARKERS = ("dev-only", "change-me")
+
+
+def _placeholder(secret: str) -> bool:
+    lowered = secret.lower()
+    return any(marker in lowered for marker in _PLACEHOLDER_MARKERS)
 
 
 class ConfigError(RuntimeError):
@@ -115,9 +122,9 @@ def load_config(env: Any = None, **overrides: Any) -> AppConfig:
     config = AppConfig(**values)
 
     if config.is_production:
-        if config.jwt_secret == DEV_JWT_SECRET or len(config.jwt_secret) < 32:
+        if _placeholder(config.jwt_secret) or len(config.jwt_secret) < 32:
             raise ConfigError("JWT_SECRET must be set to a random value of at least 32 characters")
-        if config.auth_secret == DEV_AUTH_SECRET or len(config.auth_secret) < 32:
+        if _placeholder(config.auth_secret) or len(config.auth_secret) < 32:
             raise ConfigError("AUTH_SECRET must be set to a random value of at least 32 characters")
         if "*" in config.allowed_origins:
             raise ConfigError("ALLOWED_ORIGINS must list explicit origins in production")

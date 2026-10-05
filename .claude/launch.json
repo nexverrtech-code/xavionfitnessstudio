@@ -9,8 +9,8 @@
     },
     {
       "name": "smartgym-api",
-      "runtimeExecutable": "backend/.venv/Scripts/python.exe",
-      "runtimeArgs": ["backend/scripts/dev_server.py", "--seed"],
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--project", "backend", "python", "backend/scripts/dev_server.py", "--seed"],
       "port": 8787
     }
   ]

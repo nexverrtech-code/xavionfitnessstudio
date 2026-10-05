@@ -47,6 +47,7 @@ logger = logging.getLogger("smartgym")
 API_VERSION = "1.1.0"
 API_PREFIX = "/api"
 MAX_BODY_BYTES = 256 * 1024
+BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 DOC_PATHS = {"/api/docs", "/api/docs/oauth2-redirect", "/api/openapi.json"}
 ROUTERS = (auth, users, members, trainers, plans, memberships, payments, attendance, workouts, progress, notifications,
            expenses, reports, dashboard, backups, storage, settings, portal, messages)
@@ -136,6 +137,27 @@ class EdgeMiddleware:
             too_big = int(headers.get("content-length") or 0) > MAX_BODY_BYTES
         except ValueError:
             too_big = True
+        if not too_big and method in BODY_METHODS:
+            # Content-Length can be absent (chunked upload) or wrong, so count what actually arrives.
+            # The limit is small, so the body is read here and replayed to the app.
+            body, more = bytearray(), True
+            while more and not too_big:
+                message = await receive()
+                if message["type"] != "http.request":
+                    break
+                body += message.get("body", b"")
+                more = message.get("more_body", False)
+                too_big = len(body) > MAX_BODY_BYTES
+            replayed, original_receive = False, receive
+
+            async def receive_buffered() -> dict:
+                nonlocal replayed
+                if not replayed:
+                    replayed = True
+                    return {"type": "http.request", "body": bytes(body), "more_body": False}
+                return await original_receive()
+
+            receive = receive_buffered
         if too_big:
             await _send_json(send, 413, {"error": {"code": "PAYLOAD_TOO_LARGE", "message": "The request is too large."}}, cors)
             return
