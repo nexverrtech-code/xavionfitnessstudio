@@ -1,63 +1,86 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "smartgym-api",
-  "main": "src/main.py",
-  "compatibility_date": "2026-09-01",
-  "compatibility_flags": ["python_workers"],
-
-  // One Worker serves the whole site on its own domain (Cloudflare creates the DNS record and
-  // certificate): /api/* runs the Python API, everything else is the React app from ../frontend/dist.
-  // Build the frontend first (cd frontend && npm run build, VITE_API_URL empty = same origin).
-  "routes": [{ "pattern": "xavion.nexverrtech.com", "custom_domain": true }],
-  "workers_dev": false,
-  "assets": {
-    "directory": "../frontend/dist",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
-
-  // Never hard-code database ids or secrets in application code: the Worker reaches D1
-  // only through this binding (self.env.DB).
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "smartgym-db",
-      // Replace with the id printed by: npx wrangler d1 create smartgym-db
-      "database_id": "4aa65ff7-1270-447e-826e-8040e98f6fd1",
-      "migrations_dir": "migrations"
-    }
-  ],
-
-  // Once a day at 00:30 UTC = 06:00 IST: membership statuses, expiry reminders (in-app, and
-  // WhatsApp / email when switched on), clean-up of non-critical data and the storage snapshot.
-  // Every minute: send queued WhatsApp / email messages (does nothing until a channel is set up).
-  "triggers": { "crons": ["30 0 * * *", "* * * * *"] },
-
-  // Per-IP sign-in throttle (Workers Rate Limiting binding). Account lockout after
-  // 5 failed passwords is enforced in D1 regardless; remove this block if your plan
-  // doesn't offer the binding.
-  "ratelimits": [
-    { "name": "LOGIN_LIMITER", "namespace_id": "4201", "simple": { "limit": 10, "period": 60 } }
-  ],
-
-  // Public, non-secret configuration. Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN,
-  // CF_API_TOKEN, WHATSAPP_TOKEN and RESEND_API_KEY) are set with `npx wrangler secret put NAME` — never here.
-  "vars": {
-    "ENVIRONMENT": "production",
-    "ALLOWED_ORIGINS": "https://xavion.nexverrtech.com",
-    "GYM_TIMEZONE": "Asia/Kolkata",
-    "GYM_UTC_OFFSET_MINUTES": "330",
-    "DEFAULT_COUNTRY_CODE": "91",
-    // Cloudflare Free plan: 500 MB per D1 database, 7 days of Time Travel.
-    "D1_MAX_BYTES": "500000000",
-    "D1_TIME_TRAVEL_DAYS": "7",
-    "D1_DATABASE_NAME": "smartgym-db",
-    // PBKDF2 rounds sized for the Free plan's 10 ms CPU budget (raise on Workers Paid).
-    "PASSWORD_ITERATIONS": "20000"
-    // Automatic messages (see README -> Automatic WhatsApp and email). Uncomment and fill in:
-    // "WHATSAPP_PHONE_NUMBER_ID": "your WhatsApp Cloud API phone number id",
-    // "EMAIL_FROM": "receipts@yourdomain.com"
-  },
-
-  "observability": { "enabled": true }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "smartgym-api",
+	"main": "src/main.py",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": [
+		"python_workers"
+	],
+	// One Worker serves the whole site on its own domain (Cloudflare creates the DNS record and
+	// certificate): /api/* runs the Python API, everything else is the React app from ../frontend/dist.
+	// Build the frontend first (cd frontend && npm run build, VITE_API_URL empty = same origin).
+	"routes": [
+		{
+			"pattern": "xavion.nexverrtech.com",
+			"custom_domain": true
+		}
+	],
+	"workers_dev": false,
+	"assets": {
+		"directory": "../frontend/dist",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	// Never hard-code database ids or secrets in application code: the Worker reaches D1
+	// only through this binding (self.env.DB).
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "smartgym-db",
+			// Replace with the id printed by: npx wrangler d1 create smartgym-db
+			"database_id": "773a9877-a574-4dc7-8074-093f684a8cd9",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "smartgym_db",
+			"database_name": "smartgym-db",
+			"database_id": "773a9877-a574-4dc7-8074-093f684a8cd9",
+			"remote": true
+		}
+	],
+	// Once a day at 00:30 UTC = 06:00 IST: membership statuses, expiry reminders (in-app, and
+	// WhatsApp / email when switched on), clean-up of non-critical data and the storage snapshot.
+	// Every minute: send queued WhatsApp / email messages (does nothing until a channel is set up).
+	"triggers": {
+		"crons": [
+			"30 0 * * *",
+			"* * * * *"
+		]
+	},
+	// Per-IP sign-in throttle (Workers Rate Limiting binding). Account lockout after
+	// 5 failed passwords is enforced in D1 regardless; remove this block if your plan
+	// doesn't offer the binding.
+	"ratelimits": [
+		{
+			"name": "LOGIN_LIMITER",
+			"namespace_id": "4201",
+			"simple": {
+				"limit": 10,
+				"period": 60
+			}
+		}
+	],
+	// Public, non-secret configuration. Secrets (JWT_SECRET, AUTH_SECRET, optional SETUP_TOKEN,
+	// CF_API_TOKEN, WHATSAPP_TOKEN and RESEND_API_KEY) are set with `npx wrangler secret put NAME` — never here.
+	"vars": {
+		"ENVIRONMENT": "production",
+		"ALLOWED_ORIGINS": "https://xavion.nexverrtech.com",
+		"GYM_TIMEZONE": "Asia/Kolkata",
+		"GYM_UTC_OFFSET_MINUTES": "330",
+		"DEFAULT_COUNTRY_CODE": "91",
+		// Cloudflare Free plan: 500 MB per D1 database, 7 days of Time Travel.
+		"D1_MAX_BYTES": "500000000",
+		"D1_TIME_TRAVEL_DAYS": "7",
+		"D1_DATABASE_NAME": "smartgym-db",
+		// PBKDF2 rounds sized for the Free plan's 10 ms CPU budget (raise on Workers Paid).
+		"PASSWORD_ITERATIONS": "20000"
+		// Automatic messages (see README -> Automatic WhatsApp and email). Uncomment and fill in:
+		// "WHATSAPP_PHONE_NUMBER_ID": "your WhatsApp Cloud API phone number id",
+		// "EMAIL_FROM": "receipts@yourdomain.com"
+	},
+	"observability": {
+		"enabled": true
+	}
 }
